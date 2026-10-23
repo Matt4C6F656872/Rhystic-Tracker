@@ -245,8 +245,33 @@ async fn dispatch_parsed_event(
             assembler.register_deck_catalog(decks);
             println!("[EVENT: DECK_CATALOG] Registered {} decks into memory catalog & saved decklists", count);
         }
+        ParsedEvent::ConnectResp {
+            system_seat_id,
+            deck_cards,
+            commander_cards,
+        } => {
+            let count = deck_cards.len();
+            assembler.handle_connect_resp(system_seat_id, deck_cards, commander_cards);
+            println!(
+                "[EVENT: CONNECT_RESP] Seat = {:?}, Starting Library Cards = {}",
+                system_seat_id, count
+            );
+        }
         ParsedEvent::GameStateUpdates { steps } => {
             for step in steps {
+                if let Some(seat) = step.system_seat_id {
+                    assembler.set_local_player_seat(seat);
+                }
+                if let Some(deck_cards) = step.connect_deck_cards {
+                    assembler.handle_connect_resp(
+                        step.system_seat_id,
+                        deck_cards,
+                        step.connect_commander_cards.unwrap_or_default(),
+                    );
+                }
+                if !step.zones.is_empty() {
+                    assembler.register_zones_metadata(&step.zones);
+                }
                 for (orig_id, new_id) in step.object_id_changes {
                     assembler.handle_object_id_changed(orig_id, new_id);
                 }
@@ -278,6 +303,9 @@ async fn dispatch_parsed_event(
                 }
                 if !step.diff_deleted_ids.is_empty() {
                     assembler.handle_deleted_instances(&step.diff_deleted_ids);
+                }
+                if !step.zones.is_empty() {
+                    assembler.apply_zones_snapshot(&step.zones);
                 }
                 for (target_id, counter_type, amount) in step.counter_events {
                     assembler.process_counter_event(target_id, counter_type, amount);
@@ -741,7 +769,7 @@ fn main() {
                 "Rhystic Tracker (Test Environment)".to_string()
             };
 
-            let tray = TrayIconBuilder::with_id("main-tray")
+            let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(default_tray_icon.clone())
                 .tooltip(&default_tooltip)
                 .menu(&tray_menu)

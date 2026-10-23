@@ -3812,7 +3812,7 @@ impl DatabaseManager {
         .await?;
 
         let now = chrono::Utc::now();
-        let (daily_reset_raw, weekly_reset_raw, stored_daily_wins, stored_weekly_wins, updated_at_raw) = if let Some(r) = row {
+        let (daily_reset_raw, weekly_reset_raw, stored_daily_wins, stored_weekly_wins, _updated_at_raw) = if let Some(r) = row {
             (
                 r.get::<String, _>("daily_reset_timestamp"),
                 r.get::<String, _>("weekly_reset_timestamp"),

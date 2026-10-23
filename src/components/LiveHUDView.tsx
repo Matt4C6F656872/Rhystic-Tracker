@@ -8,6 +8,7 @@ import symbolIcon from '../assets/RhysticTrackerICON.svg';
 import { RoundTurnGroup } from './timeline/RoundTurnGroup';
 import { TurnActionRow } from './timeline/TurnActionRow';
 import { enrichActionsWithCombatContext } from './timeline/roundHighlightUtils';
+import { LiveDeckTrackerPanel } from './LiveDeckTrackerView';
 
 interface LiveHUDViewProps {
   palette?: any;
@@ -61,6 +62,18 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
 
   // Search input state
   const [search, setSearch] = useState<string>('');
+
+  // Toggleable Deck Tracker split-panel state
+  const [showDeckTrackerSplit, setShowDeckTrackerSplit] = useState<boolean>(() => {
+    return localStorage.getItem('liveHudDeckSplit') === 'true';
+  });
+  const toggleDeckTrackerSplit = () => {
+    setShowDeckTrackerSplit((prev) => {
+      const next = !prev;
+      localStorage.setItem('liveHudDeckSplit', String(next));
+      return next;
+    });
+  };
 
   // Result banner dismiss state
   const [dismissedResultMatchId, setDismissedResultMatchId] = useState<string | null>(null);
@@ -1002,6 +1015,25 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
             </div>
           )}
 
+          {/* Toggleable Live Deck Tracker Split-Panel Button */}
+          <button
+            onClick={toggleDeckTrackerSplit}
+            className={`flex items-center gap-2 px-3 py-1 border text-xs font-sans font-bold uppercase tracking-wider transition-colors h-8 cursor-pointer ${
+              showDeckTrackerSplit
+                ? 'bg-sky-500/20 border-sky-400/50 text-sky-300'
+                : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-neutral-300 hover:text-white'
+            }`}
+            title="Toggle Live Deck Tracker split-panel"
+          >
+            <span className="ms ms-ability-surveil text-xs" />
+            <span>Deck Tracker</span>
+            {liveMatchState?.deck_tracker?.has_deck && (
+              <span className="font-mono text-[11px] text-white/90">
+                ({liveMatchState.deck_tracker.total_library_cards}/{liveMatchState.deck_tracker.initial_library_cards})
+              </span>
+            )}
+          </button>
+
           {/* Close Match Button (appears when match is completed) */}
           {(liveMatchState?.status === 'COMPLETED' || liveMatchState?.just_completed) && (
             <button
@@ -1229,89 +1261,108 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
 
 
 
-          {/* Top Timeline Column Labels (Left = Opponent, Right = You) */}
-          <div className="flex items-center justify-between px-3.5 pt-0.5 shrink-0">
-            <div className={`text-[11px] font-sans font-black tracking-[0.15em] uppercase ${leftColorClass} pl-1`}>
-              {leftLabel}
-            </div>
-            <div className={`text-[11px] font-sans font-black tracking-[0.15em] uppercase ${rightColorClass} pr-1`}>
-              {rightLabel}
-            </div>
-          </div>
-
-          {/* UNIFIED TIMELINE CONTAINER (Standardized bg-neutral-950/50, All Rounds Expanded by Default) */}
-          <div
-            ref={timelineRef}
-            className="flex-1 min-h-0 border border-white/10 bg-neutral-950/50 backdrop-blur-md p-3 overflow-y-auto custom-scrollbar flex flex-col space-y-2.5"
-          >
-            {/* Opening Phase Row (if any) */}
-            {openingEvents.length > 0 && (
-              <div className="border-b border-white/10 pb-1 shrink-0">
-                <div
-                  className="flex items-center justify-between px-3 py-1 bg-purple-500/10 hover:bg-purple-500/15 border-y border-purple-500/20 cursor-pointer transition-colors select-none text-[10px] font-mono"
-                  onClick={() => setOpeningCollapsed((prev) => !prev)}
-                >
-                  <div className="flex items-center gap-1.5">
-                    {openingCollapsed ? (
-                      <ChevronRight className="w-3 h-3 text-purple-300" />
-                    ) : (
-                      <ChevronDown className="w-3 h-3 text-purple-300" />
-                    )}
-                    <span className="font-bold text-purple-300 uppercase tracking-wider">
-                      OPENING PHASE · TURN 0
-                    </span>
-                    <span className="text-purple-300/70 font-sans text-[9.5px]">
-                      (Mulligans & Opening Hands)
-                    </span>
-                  </div>
-                  <span className="text-purple-300/80">
-                    {openingEvents.length} {openingEvents.length === 1 ? 'action' : 'actions'}
-                  </span>
+          {/* TIMELINE + OPTIONAL LIVE DECK TRACKER SPLIT PANEL */}
+          <div className="flex-1 min-h-0 flex gap-3 overflow-hidden">
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col space-y-1.5 overflow-hidden">
+              {/* Top Timeline Column Labels (Left = Opponent, Right = You) */}
+              <div className="flex items-center justify-between px-3.5 pt-0.5 shrink-0">
+                <div className={`text-[11px] font-sans font-black tracking-[0.15em] uppercase ${leftColorClass} pl-1`}>
+                  {leftLabel}
                 </div>
+                <div className={`text-[11px] font-sans font-black tracking-[0.15em] uppercase ${rightColorClass} pr-1`}>
+                  {rightLabel}
+                </div>
+              </div>
 
-                {!openingCollapsed && (
-                  <div className="pt-0.5 pb-1 space-y-0">
-                    {openingEvents.map((ev: any, idx: number) => (
-                      <TurnActionRow
-                        key={`live-open-${idx}`}
-                        action={ev}
-                        isTurnActivePlayer={firstPlayerIsHero}
-                        density="compact"
-                        opponentName={opponentName}
-                        searchTerm={search}
-                        onCardClick={(card) => onShowCard && onShowCard({ name: card.name, grp_id: card.grp_id })}
-                      />
-                    ))}
+              {/* UNIFIED TIMELINE CONTAINER (Standardized bg-neutral-950/50, All Rounds Expanded by Default) */}
+              <div
+                ref={timelineRef}
+                className="flex-1 min-h-0 border border-white/10 bg-neutral-950/50 backdrop-blur-md p-3 overflow-y-auto custom-scrollbar flex flex-col space-y-2.5"
+              >
+                {/* Opening Phase Row (if any) */}
+                {openingEvents.length > 0 && (
+                  <div className="border-b border-white/10 pb-1 shrink-0">
+                    <div
+                      className="flex items-center justify-between px-3 py-1 bg-purple-500/10 hover:bg-purple-500/15 border-y border-purple-500/20 cursor-pointer transition-colors select-none text-[10px] font-mono"
+                      onClick={() => setOpeningCollapsed((prev) => !prev)}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {openingCollapsed ? (
+                          <ChevronRight className="w-3 h-3 text-purple-300" />
+                        ) : (
+                          <ChevronDown className="w-3 h-3 text-purple-300" />
+                        )}
+                        <span className="font-bold text-purple-300 uppercase tracking-wider">
+                          OPENING PHASE · TURN 0
+                        </span>
+                        <span className="text-purple-300/70 font-sans text-[9.5px]">
+                          (Mulligans & Opening Hands)
+                        </span>
+                      </div>
+                      <span className="text-purple-300/80">
+                        {openingEvents.length} {openingEvents.length === 1 ? 'action' : 'actions'}
+                      </span>
+                    </div>
+
+                    {!openingCollapsed && (
+                      <div className="pt-0.5 pb-1 space-y-0">
+                        {openingEvents.map((ev: any, idx: number) => (
+                          <TurnActionRow
+                            key={`live-open-${idx}`}
+                            action={ev}
+                            isTurnActivePlayer={firstPlayerIsHero}
+                            density="compact"
+                            opponentName={opponentName}
+                            searchTerm={search}
+                            onCardClick={(card) => onShowCard && onShowCard({ name: card.name, grp_id: card.grp_id })}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* In-Game Synchronized Rounds (Expanded by Default with Auto-Scroll) */}
+                {roundsList.map((r) => (
+                  <RoundTurnGroup
+                    key={`live-round-${r.round}`}
+                    roundNum={r.round}
+                    firstTurnNum={r.firstTurn}
+                    secondTurnNum={r.secondTurn}
+                    firstTurnEvents={r.first}
+                    secondTurnEvents={r.second}
+                    firstPlayerIsHero={firstPlayerIsHero}
+                    opponentName={opponentName}
+                    isRoundCollapsed={collapsedRounds.has(r.round)}
+                    onToggleRound={() => toggleRound(r.round)}
+                    collapsedTurns={collapsedTurns}
+                    onToggleTurn={toggleTurn}
+                    density="compact"
+                    searchTerm={search}
+                    onCardClick={(card) => onShowCard && onShowCard({ name: card.name, grp_id: card.grp_id })}
+                  />
+                ))}
+
+                {roundsList.length === 0 && openingEvents.length === 0 && (
+                  <p className="text-xs font-sans italic text-neutral-400 py-8 text-center">
+                    {query ? 'No matching actions found' : 'Awaiting first game actions...'}
+                  </p>
+                )}
               </div>
-            )}
+            </div>
 
-            {/* In-Game Synchronized Rounds (Expanded by Default with Auto-Scroll) */}
-            {roundsList.map((r) => (
-              <RoundTurnGroup
-                key={`live-round-${r.round}`}
-                roundNum={r.round}
-                firstTurnNum={r.firstTurn}
-                secondTurnNum={r.secondTurn}
-                firstTurnEvents={r.first}
-                secondTurnEvents={r.second}
-                firstPlayerIsHero={firstPlayerIsHero}
-                opponentName={opponentName}
-                isRoundCollapsed={collapsedRounds.has(r.round)}
-                onToggleRound={() => toggleRound(r.round)}
-                collapsedTurns={collapsedTurns}
-                onToggleTurn={toggleTurn}
-                density="compact"
-                searchTerm={search}
-                onCardClick={(card) => onShowCard && onShowCard({ name: card.name, grp_id: card.grp_id })}
-              />
-            ))}
-
-            {roundsList.length === 0 && openingEvents.length === 0 && (
-              <p className="text-xs font-sans italic text-neutral-400 py-8 text-center">
-                {query ? 'No matching actions found' : 'Awaiting first game actions...'}
-              </p>
+            {showDeckTrackerSplit && (
+              <div className="w-[390px] xl:w-[430px] shrink-0 min-h-0 flex flex-col overflow-hidden">
+                <LiveDeckTrackerPanel
+                  deckTracker={liveMatchState?.deck_tracker}
+                  deckName={liveMatchState?.player_deck_name}
+                  format={liveMatchState?.format}
+                  palette={palette}
+                  compact={true}
+                  searchQuery={search}
+                  onShowCard={onShowCard}
+                />
+              </div>
             )}
           </div>
 

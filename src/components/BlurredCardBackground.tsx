@@ -12,7 +12,7 @@ const ACCENT_OVERLAY_OPACITY = 0.04;
 
 const BG_TAB_IDS = [
   'dashboard', 'matches', 'decks', 'collection',
-  'achievements', 'leaderboards', 'live', 'settings',
+  'achievements', 'leaderboards', 'live', 'live-deck', 'settings',
 ];
 
 interface BlurredCardBackgroundProps {

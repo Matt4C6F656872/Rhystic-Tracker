@@ -8,11 +8,24 @@ pub struct AuthPayload {
     pub screen_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ZoneStateInfo {
+    pub zone_id: u32,
+    pub zone_type: String,
+    pub owner_seat_id: Option<u32>,
+    pub object_instance_ids: Vec<u32>,
+    pub has_instance_ids_field: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GameStateStep {
     pub msg_id: Option<u64>,
     pub turn_number: u32,
     pub active_seat: u32,
+    pub system_seat_id: Option<u32>,
+    pub connect_deck_cards: Option<Vec<u32>>,
+    pub connect_commander_cards: Option<Vec<u32>>,
+    pub zones: Vec<ZoneStateInfo>,
     pub objects: Vec<(u32, Option<u32>, Option<u32>, u32, bool, bool, Option<String>)>, // (inst_id, grp_id, owner_seat, zone_id, is_card, is_token, token_name)
     pub diff_deleted_ids: Vec<u32>,
     pub ability_associations: Vec<(u32, u32)>,
@@ -114,6 +127,11 @@ pub enum ParsedEvent {
     MatchCreated { match_id: String, format_name: String, assigned_deck_event: bool, reserved_players: serde_json::Value },
     DeckSubmitted { deck_name: String, total_cards: usize, main_deck: Vec<u32>, commander_id: Option<u32>, deck_id: Option<String> },
     DeckCatalogBatch { decks: Vec<(String, String, Option<u32>, Vec<u32>)> },
+    ConnectResp {
+        system_seat_id: Option<u32>,
+        deck_cards: Vec<u32>,
+        commander_cards: Vec<u32>,
+    },
     GameStateUpdates {
         steps: Vec<GameStateStep>,
     },
@@ -343,24 +361,114 @@ pub fn parse_line(line: &str) -> ParsedEvent {
         }
     }
 
-    // Ingress and process real-time GameStateMessages (zone transitions, board states, turn changes)
-    if line.contains("GREMessageType_GameStateMessage") || line.contains("GREMessageType_PromptReq") {
+    // Ingress and process real-time GreToClientEvent messages (ConnectResp, GameStateMessages, zone transitions, board states, turn changes)
+    if line.contains("GREMessageType_GameStateMessage")
+        || line.contains("GREMessageType_PromptReq")
+        || line.contains("GREMessageType_ConnectResp")
+        || line.contains("connectResp")
+    {
         if let Some(start) = line.find('{') {
             let json_str = &line[start..];
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json_str) {
-                let messages = v.get("greToClientEvent")
-                    .and_then(|e| e.get("greToClientMessages"))
+                let gre_event = v.get("greToClientEvent").unwrap_or(&v);
+                let event_seat_id = gre_event
+                    .get("systemSeatIds")
+                    .and_then(|arr| arr.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|s| s.as_u64())
+                    .map(|s| s as u32);
+
+                let messages = gre_event
+                    .get("greToClientMessages")
                     .and_then(|m| m.as_array());
 
                 if let Some(msgs) = messages {
                     let mut steps: Vec<GameStateStep> = Vec::new();
+                    let mut standalone_connect_resp: Option<(Option<u32>, Vec<u32>, Vec<u32>)> = None;
 
                     for msg in msgs {
                         let mtype = msg.get("type").and_then(|t| t.as_str()).unwrap_or("");
-                        if mtype == "GREMessageType_GameStateMessage" {
+                        let msg_seat_id = msg
+                            .get("systemSeatIds")
+                            .and_then(|arr| arr.as_array())
+                            .and_then(|arr| arr.first())
+                            .and_then(|s| s.as_u64())
+                            .map(|s| s as u32)
+                            .or(event_seat_id);
+
+                        if mtype == "GREMessageType_ConnectResp" || msg.get("connectResp").is_some() {
+                            if let Some(conn) = msg.get("connectResp") {
+                                let deck_msg = conn.get("deckMessage").or_else(|| conn.get("deck_message"));
+                                let deck_cards: Vec<u32> = deck_msg
+                                    .and_then(|dm| dm.get("deckCards").or_else(|| dm.get("deck_cards")))
+                                    .and_then(|arr| arr.as_array())
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|x| x.as_u64().map(|v| v as u32))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
+                                let commander_cards: Vec<u32> = deck_msg
+                                    .and_then(|dm| dm.get("commanderCards").or_else(|| dm.get("commander_cards")))
+                                    .and_then(|arr| arr.as_array())
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|x| x.as_u64().map(|v| v as u32))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
+
+                                if !deck_cards.is_empty() || !commander_cards.is_empty() {
+                                    standalone_connect_resp = Some((msg_seat_id, deck_cards.clone(), commander_cards.clone()));
+                                    let mut connect_step = GameStateStep::default();
+                                    connect_step.msg_id = msg.get("msgId").and_then(|m| m.as_u64());
+                                    connect_step.system_seat_id = msg_seat_id;
+                                    connect_step.connect_deck_cards = Some(deck_cards);
+                                    if !commander_cards.is_empty() {
+                                        connect_step.connect_commander_cards = Some(commander_cards);
+                                    }
+                                    steps.push(connect_step);
+                                }
+                            }
+                        } else if mtype == "GREMessageType_GameStateMessage" {
                             let mut step = GameStateStep::default();
                             step.msg_id = msg.get("msgId").and_then(|m| m.as_u64());
+                            step.system_seat_id = msg_seat_id;
                             if let Some(gsm) = msg.get("gameStateMessage") {
+                                if let Some(zones) = gsm.get("zones").and_then(|z| z.as_array()) {
+                                    for z in zones {
+                                        let zone_id = z.get("zoneId").and_then(|id| id.as_u64()).unwrap_or(0) as u32;
+                                        if zone_id == 0 {
+                                            continue;
+                                        }
+                                        let zone_type = z
+                                            .get("type")
+                                            .and_then(|t| t.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        let owner_seat_id = z
+                                            .get("ownerSeatId")
+                                            .and_then(|s| s.as_u64())
+                                            .map(|s| s as u32);
+                                        let inst_ids_val = z.get("objectInstanceIds");
+                                        let has_instance_ids_field = inst_ids_val.is_some();
+                                        let object_instance_ids: Vec<u32> = inst_ids_val
+                                            .and_then(|arr| arr.as_array())
+                                            .map(|arr| {
+                                                arr.iter()
+                                                    .filter_map(|x| x.as_u64().map(|v| v as u32))
+                                                    .collect()
+                                            })
+                                            .unwrap_or_default();
+                                        step.zones.push(ZoneStateInfo {
+                                            zone_id,
+                                            zone_type,
+                                            owner_seat_id,
+                                            object_instance_ids,
+                                            has_instance_ids_field,
+                                        });
+                                    }
+                                }
                                 if let Some(objs) = gsm.get("gameObjects").and_then(|o| o.as_array()) {
                                     for obj in objs {
                                         let obj_type = obj.get("type").and_then(|t| t.as_str()).unwrap_or("");
@@ -650,13 +758,37 @@ pub fn parse_line(line: &str) -> ParsedEvent {
                                     }
                                 }
 
-                                if !step.objects.is_empty() || step.turn_number > 0 || !step.life_by_seat.is_empty() || !step.damage_events.is_empty() || !step.counter_events.is_empty() || !step.draw_events.is_empty() || !step.diff_deleted_ids.is_empty() || !step.ability_associations.is_empty() || !step.object_id_changes.is_empty() || !step.life_modifications.is_empty() || !step.counter_spell_events.is_empty() || !step.zone_transfer_events.is_empty() || !step.mana_paid_events.is_empty() {
+                                if !step.objects.is_empty()
+                                    || !step.zones.is_empty()
+                                    || step.turn_number > 0
+                                    || !step.life_by_seat.is_empty()
+                                    || !step.damage_events.is_empty()
+                                    || !step.counter_events.is_empty()
+                                    || !step.draw_events.is_empty()
+                                    || !step.diff_deleted_ids.is_empty()
+                                    || !step.ability_associations.is_empty()
+                                    || !step.object_id_changes.is_empty()
+                                    || !step.life_modifications.is_empty()
+                                    || !step.counter_spell_events.is_empty()
+                                    || !step.zone_transfer_events.is_empty()
+                                    || !step.mana_paid_events.is_empty()
+                                {
                                     steps.push(step);
                                 }
                             }
                         } else if mtype == "GREMessageType_PromptReq" {
                             // PromptReq prompts the client to make a choice (e.g. Prompt 36 = Mulligan or Keep).
                             // The actual user decision is reported via ClientMessageType_MulliganResp (or mulliganResp).
+                        }
+                    }
+
+                    if steps.len() == 1 && standalone_connect_resp.is_some() && steps[0].connect_deck_cards.is_some() {
+                        if let Some((system_seat_id, deck_cards, commander_cards)) = standalone_connect_resp {
+                            return ParsedEvent::ConnectResp {
+                                system_seat_id,
+                                deck_cards,
+                                commander_cards,
+                            };
                         }
                     }
 
@@ -1820,6 +1952,41 @@ mod tests {
                 assert_eq!(eco.boosters[0].count, 3);
             }
             other => panic!("expected InventoryUpdate, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_connect_resp_deck_cards() {
+        let line = r#"{"greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_ConnectResp","systemSeatIds":[1],"msgId":1,"connectResp":{"status":"ConnectionStatus_Success","deckMessage":{"deckCards":[67001,67001,67002,67003],"commanderCards":[67999]}}}]}}"#;
+        match parse_line(line) {
+            ParsedEvent::ConnectResp {
+                system_seat_id,
+                deck_cards,
+                commander_cards,
+            } => {
+                assert_eq!(system_seat_id, Some(1));
+                assert_eq!(deck_cards, vec![67001, 67001, 67002, 67003]);
+                assert_eq!(commander_cards, vec![67999]);
+            }
+            other => panic!("expected ConnectResp, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_gamestate_zones_and_system_seat() {
+        let line = r#"{"greToClientEvent":{"greToClientMessages":[{"type":"GREMessageType_GameStateMessage","systemSeatIds":[2],"msgId":5,"gameStateMessage":{"zones":[{"zoneId":31,"type":"ZoneType_Hand","ownerSeatId":2,"objectInstanceIds":[101,102]},{"zoneId":30,"type":"ZoneType_Library","ownerSeatId":2,"objectInstanceIds":[103,104,105]}],"gameObjects":[{"instanceId":101,"grpId":67001,"type":"GameObjectType_Card","zoneId":31,"ownerSeatId":2}]}}]}}"#;
+        match parse_line(line) {
+            ParsedEvent::GameStateUpdates { steps } => {
+                assert_eq!(steps.len(), 1);
+                assert_eq!(steps[0].system_seat_id, Some(2));
+                assert_eq!(steps[0].zones.len(), 2);
+                assert_eq!(steps[0].zones[0].zone_type, "ZoneType_Hand");
+                assert_eq!(steps[0].zones[0].object_instance_ids, vec![101, 102]);
+                assert!(steps[0].zones[0].has_instance_ids_field);
+                assert_eq!(steps[0].zones[1].zone_type, "ZoneType_Library");
+                assert_eq!(steps[0].zones[1].object_instance_ids, vec![103, 104, 105]);
+            }
+            other => panic!("expected GameStateUpdates, got {:?}", other),
         }
     }
 }

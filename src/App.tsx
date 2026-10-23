@@ -24,6 +24,7 @@ import CollectionView from './components/CollectionView';
 import { MatchHistoryView } from './components/MatchHistoryView';
 import { DeckLibraryView } from './components/DeckLibraryView';
 import { LiveHUDView } from './components/LiveHUDView';
+import { LiveDeckTrackerView } from './components/LiveDeckTrackerView';
 import { CardInspectorModal } from './components/CardInspectorModal';
 import { FirstTimeSetupWizard } from './components/FirstTimeSetupWizard';
 import { AvatarOnboardingModal } from './components/AvatarOnboardingModal';
@@ -66,6 +67,7 @@ const DEFAULT_SIDEBAR_ICONS: Record<string, string> = {
   achievements: 'ms-ability-duels-renowned',
   leaderboards: 'ms-ability-kicker',
   live: 'ms-instant',
+  'live-deck': 'ms-ability-surveil',
   settings: 'ms-ability-prototype',
 };
 
@@ -176,9 +178,9 @@ export default function App() {
   }, [isSidebarCollapsedManual]);
 
   // Navigation & Filter State: Respect defaultStartupTab from settings, falling back to 'dashboard'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'matches' | 'live' | 'decks' | 'collection' | 'achievements' | 'leaderboards' | 'settings'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'matches' | 'live' | 'live-deck' | 'decks' | 'collection' | 'achievements' | 'leaderboards' | 'settings'>(() => {
     const savedDefault = localStorage.getItem('defaultStartupTab');
-    if (savedDefault && ['dashboard', 'matches', 'live', 'decks', 'collection', 'achievements', 'leaderboards', 'settings'].includes(savedDefault)) {
+    if (savedDefault && ['dashboard', 'matches', 'live', 'live-deck', 'decks', 'collection', 'achievements', 'leaderboards', 'settings'].includes(savedDefault)) {
       return savedDefault as any;
     }
     return 'dashboard';
@@ -191,7 +193,13 @@ export default function App() {
   const [sidebarIcons, setSidebarIcons] = useState<Record<string, string>>(() => {
     try {
       const saved = localStorage.getItem('sidebarIcons');
-      return saved ? { ...DEFAULT_SIDEBAR_ICONS, ...JSON.parse(saved) } : DEFAULT_SIDEBAR_ICONS;
+      if (!saved) return DEFAULT_SIDEBAR_ICONS;
+      const merged: Record<string, string> = { ...DEFAULT_SIDEBAR_ICONS, ...JSON.parse(saved) };
+      // 'ms-ability-scry' does not exist in mana-font (rendered blank); migrate it.
+      for (const key of Object.keys(merged)) {
+        if (merged[key] === 'ms-ability-scry') merged[key] = DEFAULT_SIDEBAR_ICONS[key] || 'ms-ability-surveil';
+      }
+      return merged;
     } catch {
       return DEFAULT_SIDEBAR_ICONS;
     }
@@ -783,6 +791,7 @@ export default function App() {
             opponent_cards_seen: liveState.opponent_cards_seen || 0,
             last_event: liveState.last_event,
             recent_events: liveState.recent_events || [],
+            deck_tracker: liveState.deck_tracker || null,
           });
         } else if (liveState && liveState.just_completed) {
           // Keep the HUD up showing the result overlay instead of blanking.
@@ -815,6 +824,7 @@ export default function App() {
             recent_events: (liveState.recent_events && liveState.recent_events.length > 0)
               ? liveState.recent_events
               : (prev?.match_id === liveState.match_id ? prev.recent_events || [] : []),
+            deck_tracker: liveState.deck_tracker || prev?.deck_tracker || null,
           }));
           if (wasActive) {
             wasActive = false;
@@ -881,6 +891,7 @@ export default function App() {
     { id: 'achievements', label: 'Achievements', manaIcon: 'ms-ability-duels-renowned' },
     { id: 'leaderboards', label: 'Leaderboards', manaIcon: 'ms-ability-kicker' },
     { id: 'live', label: 'Live Match HUD', manaIcon: 'ms-instant' },
+    { id: 'live-deck', label: 'Live Deck Tracker', manaIcon: 'ms-ability-surveil' },
     { id: 'settings', label: 'Settings', manaIcon: 'ms-ability-prototype' },
   ];
 
@@ -1174,7 +1185,10 @@ export default function App() {
           }`}>
             {navItems.map((item) => {
               const isActive = activeTab === item.id;
-              const isLiveMatchActive = item.id === 'live' && liveMatchState && liveMatchState.status === 'IN_MATCH';
+              const isLiveMatchActive =
+                (item.id === 'live' || item.id === 'live-deck') &&
+                liveMatchState &&
+                liveMatchState.status === 'IN_MATCH';
 
               let itemColor = isActive ? (palette?.accent || '#38BDF8') : (palette?.text || '#F8FAFC');
               let itemBg = isActive ? `${palette?.accent || '#38BDF8'}1F` : 'transparent';
@@ -1192,7 +1206,7 @@ export default function App() {
                 <button
                   key={item.id}
                   onClick={() => {
-                    if (item.id !== 'live' && liveMatchState?.status === 'COMPLETED') {
+                    if (item.id !== 'live' && item.id !== 'live-deck' && liveMatchState?.status === 'COMPLETED') {
                       setLiveMatchState(null);
                     }
                     setActiveTab(item.id as any);
@@ -1344,6 +1358,16 @@ export default function App() {
             formatChipColor={formatChipColor}
             onCloseMatch={() => setLiveMatchState(null)}
             onSelectMatch={handleSelectMatch}
+          />
+        )}
+
+        {/* VIEW 3B: Live Deck Tracker */}
+        {activeTab === 'live-deck' && (
+          <LiveDeckTrackerView
+            palette={palette}
+            liveMatchState={liveMatchState}
+            onShowCard={(card, isCommander) => openCardOverlay(card, isCommander)}
+            formatChipColor={formatChipColor}
           />
         )}
 

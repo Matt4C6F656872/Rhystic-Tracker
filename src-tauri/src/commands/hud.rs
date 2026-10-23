@@ -8,8 +8,9 @@ pub struct SharedMatchState(pub std::sync::Arc<tokio::sync::Mutex<MatchAssembler
 
 #[tauri::command]
 pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> Result<serde_json::Value, String> {
-    let (active_opt, completed_opt) = {
+    let (active_opt, completed_opt, deck_tracker_state) = {
         let assembler = state.0.lock().await;
+        let dt_clone = assembler.deck_tracker.clone();
         if let Some(active) = &assembler.active_match {
             let round = (assembler.current_turn + 1) / 2;
             let last_event = assembler.turn_events.last().map(|e| serde_json::json!({
@@ -42,9 +43,10 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
                     last_event,
                 )),
                 None,
+                dt_clone,
             )
         } else {
-            (None, assembler.last_completed.clone())
+            (None, assembler.last_completed.clone(), dt_clone)
         }
     };
 
@@ -102,9 +104,11 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
         if let Some(gid) = active.opponent_commander_id { needed_gids.insert(gid as i64); }
         for &gid in &player_cards_seen { needed_gids.insert(gid as i64); }
         for &gid in &opp_cards_seen { needed_gids.insert(gid as i64); }
+        for gid in deck_tracker_state.needed_grp_ids() { needed_gids.insert(gid); }
 
         let gid_list: Vec<i64> = needed_gids.into_iter().collect();
         let meta_map = card_db::get_batch_card_metadata(db.pool(), &gid_list).await.unwrap_or_default();
+        let deck_tracker_snapshot = deck_tracker_state.compute_snapshot(&meta_map);
 
         // Build merged chronological feed of card actions + life changes for live HUD
         let mut merged: Vec<(u64, serde_json::Value)> = Vec::new();
@@ -265,7 +269,9 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
         let player_cmdr = cached_commander_id.and_then(|gid| meta_map.get(&(gid as i64))).cloned();
         let opp_cmdr = active.opponent_commander_id.and_then(|gid| meta_map.get(&(gid as i64))).cloned();
 
+        #[allow(unused_assignments)]
         let mut player_colors: Vec<String> = Vec::new();
+        #[allow(unused_assignments)]
         let mut opp_colors: Vec<String> = Vec::new();
         let order = ["W", "U", "B", "R", "G"];
 
@@ -307,6 +313,16 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
                     }
                 }
             }
+            if ps.is_empty() {
+                for card in &deck_tracker_snapshot.cards {
+                    for c in &card.color_identity {
+                        ps.insert(c.clone());
+                    }
+                    for c in &card.colors {
+                        ps.insert(c.clone());
+                    }
+                }
+            }
             player_colors = order.iter().filter(|c| ps.contains(**c)).map(|c| c.to_string()).collect();
             opp_colors = order.iter().filter(|c| os.contains(**c)).map(|c| c.to_string()).collect();
         }
@@ -331,6 +347,7 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
             "turn_events_count": turn_events.len(),
             "last_event": last_event,
             "recent_events": recent_events,
+            "deck_tracker": deck_tracker_snapshot,
         }))
     } else {
         // No active match. If a match just completed, keep reporting its result
@@ -478,7 +495,7 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
                             let parts: Vec<&str> = ev_type.split(':').collect();
                             let delta: i32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
                             let new_total: i32 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-                            let old_total = new_total - delta;
+                            let _old_total = new_total - delta;
                             let src_name = name_opt.clone();
                             let display_str = if let Some(ref sn) = src_name {
                                 sn.clone()
@@ -558,6 +575,10 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
                         }
                     }
 
+                    let dt_gids = deck_tracker_state.needed_grp_ids();
+                    let dt_meta = card_db::get_batch_card_metadata(pool, &dt_gids).await.unwrap_or_default();
+                    let completed_deck_tracker = deck_tracker_state.compute_snapshot(&dt_meta);
+
                     return Ok(serde_json::json!({
                         "is_active": false,
                         "just_completed": true,
@@ -577,6 +598,7 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
                         "impactful_cards": impactful_cards_arr,
                         "earned_achievements": earned_achievements_arr,
                         "recent_events": completed_recent_events,
+                        "deck_tracker": completed_deck_tracker,
                     }));
                 }
 

@@ -1,7 +1,6 @@
 use crate::db::DatabaseManager;
 use crate::card_db;
 use crate::deck_list;
-use crate::parser;
 use crate::commands::collection::{owned_counts, owned_grp_ids, ownership_stats};
 use chrono::Utc;
 use sqlx::Row;

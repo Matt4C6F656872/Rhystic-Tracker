@@ -54,6 +54,7 @@ export const BG_WINDOWS = [
   { id: 'achievements', label: 'Achievements', iconClass: 'ms ms-ability-duels-renowned' },
   { id: 'leaderboards', label: 'Leaderboards', iconClass: 'ms ms-ability-kicker' },
   { id: 'live', label: 'Live HUD', iconClass: 'ms ms-instant' },
+  { id: 'live-deck', label: 'Live Deck Tracker', iconClass: 'ms ms-ability-surveil' },
   { id: 'settings', label: 'Settings', iconClass: 'ms ms-ability-prototype' },
 ];
 

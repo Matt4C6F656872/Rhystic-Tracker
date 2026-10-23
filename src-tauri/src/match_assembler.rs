@@ -146,6 +146,482 @@ pub struct LiveDamageFeedEvent {
     pub turn_number: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveDeckCardEntry {
+    pub grp_id: u32,
+    pub name: String,
+    pub mana_cost: String,
+    pub cmc: f64,
+    pub type_line: String,
+    pub is_land: bool,
+    pub colors: Vec<String>,
+    pub color_identity: Vec<String>,
+    pub rarity: String,
+    pub set_code: String,
+    pub initial_count: u32,
+    pub remaining_count: u32,
+    pub outside_library_count: u32,
+    pub draw_probability: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LiveDeckSnapshot {
+    pub has_deck: bool,
+    pub deck_source: String,
+    pub total_library_cards: u32,
+    pub initial_library_cards: u32,
+    pub total_remaining_lands: u32,
+    pub total_remaining_non_lands: u32,
+    pub land_draw_probability: f64,
+    pub non_land_draw_probability: f64,
+    pub cards: Vec<LiveDeckCardEntry>,
+}
+
+pub fn is_land_type_line(type_line: &str) -> bool {
+    let main_types = type_line.split('—').next().unwrap_or(type_line);
+    let main_types = main_types.split(" - ").next().unwrap_or(main_types);
+    main_types
+        .split(|c: char| !c.is_alphanumeric())
+        .any(|word| word.eq_ignore_ascii_case("Land"))
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LiveDeckTrackerState {
+    /// Authoritative starting library mapping grp_id -> initial_count from GREMessageType_ConnectResp
+    pub connect_deck_counts: HashMap<u32, u32>,
+    /// Fallback starting library mapping grp_id -> initial_count from DeckSubmitted / catalog
+    pub fallback_deck_counts: HashMap<u32, u32>,
+    /// Map of seen instanceId -> grpId for local-player cards (including cards revealed in library via scry/tutor)
+    pub seen_instance_grp: HashMap<u32, u32>,
+    /// Map of zoneId -> (zone_type, owner_seat_id) from GameStateMessage.zones
+    pub zone_meta: HashMap<u32, (String, Option<u32>)>,
+    /// Current primary zone of each tracked local-player card instance: instanceId -> zoneId
+    pub instance_current_zone: HashMap<u32, u32>,
+    /// Authoritative objectInstanceIds currently in the local player's ZoneType_Library
+    pub library_instance_ids: Option<Vec<u32>>,
+    /// Zone ID of the local player's ZoneType_Library if known
+    pub library_zone_id: Option<u32>,
+}
+
+impl LiveDeckTrackerState {
+    pub fn is_outside_library_zone_type(zone_type: &str) -> bool {
+        matches!(
+            zone_type,
+            "ZoneType_Hand"
+                | "ZoneType_Battlefield"
+                | "ZoneType_Graveyard"
+                | "ZoneType_Exile"
+                | "ZoneType_Stack"
+                | "ZoneType_Command"
+        )
+    }
+
+    pub fn resolve_zone_type(&self, zone_id: u32) -> &str {
+        if let Some((ztype, _)) = self.zone_meta.get(&zone_id) {
+            if !ztype.is_empty() {
+                return ztype.as_str();
+            }
+        }
+        match zone_id {
+            26 => "ZoneType_Command",
+            27 => "ZoneType_Stack",
+            28 => "ZoneType_Battlefield",
+            29 => "ZoneType_Exile",
+            30 => "ZoneType_Limbo",
+            31 | 35 => "ZoneType_Hand",
+            32 | 36 => "ZoneType_Library",
+            33 => "ZoneType_Graveyard",
+            34 => "ZoneType_Sideboard",
+            _ => "",
+        }
+    }
+
+    pub fn set_connect_deck(&mut self, deck_cards: &[u32]) {
+        self.connect_deck_counts.clear();
+        for &grp_id in deck_cards {
+            if grp_id > 0 {
+                *self.connect_deck_counts.entry(grp_id).or_insert(0) += 1;
+            }
+        }
+    }
+
+    pub fn set_fallback_deck(&mut self, main_deck: &[u32]) {
+        self.fallback_deck_counts.clear();
+        for &grp_id in main_deck {
+            if grp_id > 0 {
+                *self.fallback_deck_counts.entry(grp_id).or_insert(0) += 1;
+            }
+        }
+    }
+
+    pub fn active_deck_counts(&self) -> Option<(&HashMap<u32, u32>, &'static str)> {
+        if !self.connect_deck_counts.is_empty() {
+            Some((&self.connect_deck_counts, "connect_resp"))
+        } else if !self.fallback_deck_counts.is_empty() {
+            Some((&self.fallback_deck_counts, "submitted_deck"))
+        } else {
+            None
+        }
+    }
+
+    pub fn register_zone_metadata(&mut self, zones: &[crate::parser::ZoneStateInfo], local_seat: u32) {
+        for z in zones {
+            if z.zone_id == 0 {
+                continue;
+            }
+            self.zone_meta
+                .insert(z.zone_id, (z.zone_type.clone(), z.owner_seat_id));
+            if z.zone_type == "ZoneType_Library" && z.owner_seat_id == Some(local_seat) {
+                self.library_zone_id = Some(z.zone_id);
+            }
+        }
+    }
+
+    pub fn observe_game_object(
+        &mut self,
+        instance_id: u32,
+        grp_id: Option<u32>,
+        owner_seat: Option<u32>,
+        zone_id: u32,
+        is_card: bool,
+        is_token: bool,
+        local_seat: u32,
+    ) {
+        if !is_card || is_token || instance_id == 0 {
+            return;
+        }
+
+        let is_local = match owner_seat {
+            Some(s) if s > 0 => s == local_seat,
+            _ => self.seen_instance_grp.contains_key(&instance_id),
+        };
+        if !is_local {
+            return;
+        }
+
+        if let Some(gid) = grp_id.filter(|&g| g > 0) {
+            self.seen_instance_grp.insert(instance_id, gid);
+        }
+
+        if zone_id == 0 {
+            return;
+        }
+
+        let zone_type = self.resolve_zone_type(zone_id).to_string();
+        if zone_type == "ZoneType_Revealed"
+            || zone_type == "ZoneType_Limbo"
+            || zone_type == "ZoneType_Sideboard"
+            || zone_type.is_empty()
+        {
+            // Cards in ZoneType_Revealed (e.g. scry/tutoring) keep their seen_instance_grp
+            // entry above, while remaining in ZoneType_Library unless moved to a primary zone.
+            return;
+        }
+
+        self.instance_current_zone.insert(instance_id, zone_id);
+        if zone_type == "ZoneType_Library" {
+            if let Some(lib_ids) = &mut self.library_instance_ids {
+                if !lib_ids.contains(&instance_id) {
+                    lib_ids.push(instance_id);
+                }
+            }
+        } else if Self::is_outside_library_zone_type(&zone_type) {
+            if let Some(lib_ids) = &mut self.library_instance_ids {
+                lib_ids.retain(|&id| id != instance_id);
+            }
+        }
+    }
+
+    pub fn apply_zones_update(&mut self, zones: &[crate::parser::ZoneStateInfo], local_seat: u32) {
+        for z in zones {
+            if z.zone_id == 0 {
+                continue;
+            }
+            self.zone_meta
+                .insert(z.zone_id, (z.zone_type.clone(), z.owner_seat_id));
+
+            if z.owner_seat_id.is_some() && z.owner_seat_id != Some(local_seat) {
+                continue;
+            }
+
+            if z.zone_type == "ZoneType_Library" && z.owner_seat_id == Some(local_seat) {
+                self.library_zone_id = Some(z.zone_id);
+                if z.has_instance_ids_field {
+                    self.library_instance_ids = Some(z.object_instance_ids.clone());
+                    for &inst_id in &z.object_instance_ids {
+                        self.instance_current_zone.insert(inst_id, z.zone_id);
+                    }
+                }
+            } else if z.zone_type == "ZoneType_Revealed" {
+                // Revealed zone does not remove cards from their underlying zone (e.g. Library).
+                continue;
+            } else if Self::is_outside_library_zone_type(&z.zone_type) && z.has_instance_ids_field {
+                let present_set: HashSet<u32> = z.object_instance_ids.iter().copied().collect();
+                self.instance_current_zone
+                    .retain(|inst_id, cur_z| !(*cur_z == z.zone_id && !present_set.contains(inst_id)));
+
+                for &inst_id in &z.object_instance_ids {
+                    if z.owner_seat_id == Some(local_seat)
+                        || self.seen_instance_grp.contains_key(&inst_id)
+                    {
+                        self.instance_current_zone.insert(inst_id, z.zone_id);
+                        if let Some(lib_ids) = &mut self.library_instance_ids {
+                            lib_ids.retain(|&id| id != inst_id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn handle_object_id_changed(&mut self, orig_id: u32, new_id: u32) {
+        if let Some(gid) = self.seen_instance_grp.get(&orig_id).copied() {
+            self.seen_instance_grp.insert(new_id, gid);
+        }
+        if let Some(z_id) = self.instance_current_zone.remove(&orig_id) {
+            self.instance_current_zone.insert(new_id, z_id);
+        }
+        if let Some(lib_ids) = &mut self.library_instance_ids {
+            if let Some(pos) = lib_ids.iter().position(|&id| id == orig_id) {
+                lib_ids[pos] = new_id;
+            }
+        }
+    }
+
+    pub fn handle_deleted_instances(&mut self, deleted_ids: &[u32]) {
+        for &inst_id in deleted_ids {
+            self.instance_current_zone.remove(&inst_id);
+        }
+    }
+
+    pub fn handle_mulligan_reset(&mut self, _local_seat: u32) {
+        let hand_zone_ids: HashSet<u32> = self
+            .zone_meta
+            .iter()
+            .filter_map(|(&zid, (ztype, _))| {
+                if ztype == "ZoneType_Hand" {
+                    Some(zid)
+                } else {
+                    None
+                }
+            })
+            .chain([31u32, 35u32])
+            .collect();
+
+        self.instance_current_zone
+            .retain(|_, zid| !hand_zone_ids.contains(zid));
+        self.library_instance_ids = None;
+    }
+
+    pub fn count_outside_library_by_grp(&self) -> HashMap<u32, u32> {
+        let lib_set: HashSet<u32> = self
+            .library_instance_ids
+            .as_ref()
+            .map(|v| v.iter().copied().collect())
+            .unwrap_or_default();
+
+        let mut outside_counts: HashMap<u32, u32> = HashMap::new();
+        for (&inst_id, &zone_id) in &self.instance_current_zone {
+            if lib_set.contains(&inst_id) {
+                continue;
+            }
+            if Some(zone_id) == self.library_zone_id {
+                continue;
+            }
+            let ztype = self.resolve_zone_type(zone_id);
+            if Self::is_outside_library_zone_type(ztype) {
+                if let Some(&grp_id) = self.seen_instance_grp.get(&inst_id) {
+                    if grp_id > 0 {
+                        *outside_counts.entry(grp_id).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+        outside_counts
+    }
+
+    pub fn needed_grp_ids(&self) -> Vec<i64> {
+        let mut gids: Vec<i64> = Vec::new();
+        if let Some((counts, _)) = self.active_deck_counts() {
+            for &gid in counts.keys() {
+                if gid > 0 {
+                    gids.push(gid as i64);
+                }
+            }
+        }
+        for &gid in self.seen_instance_grp.values() {
+            if gid > 0 {
+                gids.push(gid as i64);
+            }
+        }
+        gids.sort_unstable();
+        gids.dedup();
+        gids
+    }
+
+    pub fn compute_snapshot(
+        &self,
+        meta_map: &HashMap<i64, crate::card_db::CardMetadata>,
+    ) -> LiveDeckSnapshot {
+        let Some((deck_counts, source)) = self.active_deck_counts() else {
+            return LiveDeckSnapshot {
+                has_deck: false,
+                deck_source: "none".to_string(),
+                ..Default::default()
+            };
+        };
+
+        let outside_by_grp = self.count_outside_library_by_grp();
+
+        let mut initial_library_cards = 0u32;
+        let mut sum_remaining = 0u32;
+        let mut total_remaining_lands = 0u32;
+        let mut total_remaining_non_lands = 0u32;
+        let mut cards: Vec<LiveDeckCardEntry> = Vec::with_capacity(deck_counts.len());
+
+        for (&grp_id, &initial_count) in deck_counts {
+            if grp_id == 0 || initial_count == 0 {
+                continue;
+            }
+            initial_library_cards += initial_count;
+            let outside_count = outside_by_grp.get(&grp_id).copied().unwrap_or(0);
+            let remaining_count = initial_count.saturating_sub(outside_count);
+            sum_remaining += remaining_count;
+
+            let meta = meta_map.get(&(grp_id as i64));
+            let name = meta
+                .map(|m| m.name.clone())
+                .filter(|n| !n.is_empty())
+                .unwrap_or_else(|| format!("Card #{}", grp_id));
+            let mana_cost = meta
+                .and_then(|m| m.mana_cost.clone())
+                .unwrap_or_default();
+            let cmc = meta.map(|m| m.cmc as f64).unwrap_or(0.0);
+            let type_line = meta
+                .and_then(|m| m.card_type.clone())
+                .filter(|t| !t.is_empty())
+                .unwrap_or_else(|| "Unknown".to_string());
+            let is_land = is_land_type_line(&type_line);
+            let parse_color_str = |s: &str| -> Vec<String> {
+                let mut out: Vec<String> = Vec::new();
+                for ch in s.chars() {
+                    let mapped = match ch {
+                        '1' | 'W' => Some("W"),
+                        '2' | 'U' => Some("U"),
+                        '3' | 'B' => Some("B"),
+                        '4' | 'R' => Some("R"),
+                        '5' | 'G' => Some("G"),
+                        _ => None,
+                    };
+                    if let Some(code) = mapped {
+                        if !out.iter().any(|c| c == code) {
+                            out.push(code.to_string());
+                        }
+                    }
+                }
+                out
+            };
+            let colors: Vec<String> = meta
+                .and_then(|m| m.colors.as_deref())
+                .map(parse_color_str)
+                .unwrap_or_default();
+            let color_identity: Vec<String> = meta
+                .and_then(|m| m.color_identity.as_deref())
+                .map(parse_color_str)
+                .unwrap_or_default();
+            let rarity = match meta.map(|m| m.rarity).unwrap_or(2) {
+                5 => "mythic".to_string(),
+                4 => "rare".to_string(),
+                3 => "uncommon".to_string(),
+                _ => "common".to_string(),
+            };
+            let set_code = meta
+                .and_then(|m| m.set_code.clone())
+                .unwrap_or_default();
+
+            if is_land {
+                total_remaining_lands += remaining_count;
+            } else {
+                total_remaining_non_lands += remaining_count;
+            }
+
+            cards.push(LiveDeckCardEntry {
+                grp_id,
+                name,
+                mana_cost,
+                cmc,
+                type_line,
+                is_land,
+                colors,
+                color_identity,
+                rarity,
+                set_code,
+                initial_count,
+                remaining_count,
+                outside_library_count: outside_count,
+                draw_probability: 0.0,
+            });
+        }
+
+        let total_library_cards = self
+            .library_instance_ids
+            .as_ref()
+            .map(|ids| ids.len() as u32)
+            .unwrap_or(sum_remaining);
+
+        for card in &mut cards {
+            card.draw_probability = if total_library_cards > 0 {
+                (card.remaining_count as f64 / total_library_cards as f64) * 100.0
+            } else {
+                0.0
+            };
+        }
+
+        let land_draw_probability = if total_library_cards > 0 {
+            (total_remaining_lands as f64 / total_library_cards as f64) * 100.0
+        } else {
+            0.0
+        };
+        let non_land_draw_probability = if total_library_cards > 0 {
+            (total_remaining_non_lands as f64 / total_library_cards as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        cards.sort_by(|a, b| {
+            let a_depleted = a.remaining_count == 0;
+            let b_depleted = b.remaining_count == 0;
+            a_depleted
+                .cmp(&b_depleted)
+                .then_with(|| {
+                    b.draw_probability
+                        .partial_cmp(&a.draw_probability)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| b.remaining_count.cmp(&a.remaining_count))
+                .then_with(|| {
+                    a.cmc
+                        .partial_cmp(&b.cmc)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| a.name.cmp(&b.name))
+                .then_with(|| a.grp_id.cmp(&b.grp_id))
+        });
+
+        LiveDeckSnapshot {
+            has_deck: true,
+            deck_source: source.to_string(),
+            total_library_cards,
+            initial_library_cards,
+            total_remaining_lands,
+            total_remaining_non_lands,
+            land_draw_probability,
+            non_land_draw_probability,
+            cards,
+        }
+    }
+}
+
 /// Placeholder deck name for assigned-deck events (Welcome Deck Duels, Jump In)
 /// where Arena never emits a deck submission. Deliberately NOT "Selected Deck":
 /// the post-match fingerprint resolvers key on that exact string and would
@@ -160,6 +636,9 @@ pub struct MatchAssembler {
     pub cached_deck_name: Option<String>,
     pub cached_deck_id: Option<String>,
     pub cached_commander_id: Option<u32>,
+    pub cached_main_deck: Vec<u32>,
+    pub pending_connect_deck: Option<(Option<u32>, Vec<u32>, Vec<u32>)>,
+    pub deck_tracker: LiveDeckTrackerState,
     pub known_decks: HashMap<String, (String, Option<u32>, Vec<u32>)>,
     /// True when the current (or cached) deck is a legitimate user deck, not a
     /// preset. Only legitimate matches feed the draw-based collection.
@@ -231,6 +710,9 @@ impl MatchAssembler {
             cached_deck_name: None,
             cached_deck_id: None,
             cached_commander_id: None,
+            cached_main_deck: Vec::new(),
+            pending_connect_deck: None,
+            deck_tracker: LiveDeckTrackerState::default(),
             known_decks: HashMap::new(),
             match_legitimate: true,
             last_assigned_deck_event: false,
@@ -368,6 +850,10 @@ impl MatchAssembler {
         self.collection_draws.clear();
         self.turn_1_active_seat = None;
         self.match_start_time = Some(now);
+        self.deck_tracker = LiveDeckTrackerState::default();
+        if !assigned_deck_event && !self.cached_main_deck.is_empty() {
+            self.deck_tracker.set_fallback_deck(&self.cached_main_deck);
+        }
 
         // Resolve deck name from cached deck or catalog lookup by cached_deck_id.
         //
@@ -386,7 +872,7 @@ impl MatchAssembler {
 
         if !assigned_deck_event && (deck_name.is_empty() || deck_name == "Selected Deck") {
             if let Some(did) = &self.cached_deck_id {
-                if let Some((name, cmd, _)) = self.known_decks.get(did) {
+                if let Some((name, cmd, main)) = self.known_decks.get(did) {
                     if !name.is_empty() {
                         deck_name = name.clone();
                         self.cached_deck_name = Some(name.clone());
@@ -394,6 +880,9 @@ impl MatchAssembler {
                     if is_brawl && commander_id.is_none() && cmd.is_some() {
                         commander_id = *cmd;
                         self.cached_commander_id = *cmd;
+                    }
+                    if self.deck_tracker.fallback_deck_counts.is_empty() && !main.is_empty() {
+                        self.deck_tracker.set_fallback_deck(main);
                     }
                 }
             }
@@ -439,6 +928,10 @@ impl MatchAssembler {
             min_player_life: None,
             hero_seat_id: self.player_seat_id,
         });
+
+        if let Some((seat, cards, cmds)) = self.pending_connect_deck.take() {
+            self.handle_connect_resp(seat, cards, cmds);
+        }
     }
 
     pub fn update_reserved_players(&mut self, players: &serde_json::Value) {
@@ -516,7 +1009,51 @@ impl MatchAssembler {
         }
     }
 
+    pub fn set_local_player_seat(&mut self, seat_id: u32) {
+        if seat_id > 0 {
+            self.player_seat_id = seat_id;
+            if let Some(m) = &mut self.active_match {
+                m.hero_seat_id = seat_id;
+            }
+        }
+    }
+
+    pub fn handle_connect_resp(
+        &mut self,
+        system_seat_id: Option<u32>,
+        deck_cards: Vec<u32>,
+        commander_cards: Vec<u32>,
+    ) {
+        if let Some(seat) = system_seat_id.filter(|&s| s > 0) {
+            self.set_local_player_seat(seat);
+        }
+        if !deck_cards.is_empty() {
+            self.deck_tracker.set_connect_deck(&deck_cards);
+        }
+        if let Some(&cmd) = commander_cards.first().filter(|&&c| c > 0) {
+            if let Some(m) = &mut self.active_match {
+                if m.player_commander_id.is_none() {
+                    m.player_commander_id = Some(cmd);
+                }
+            }
+        }
+        if self.active_match.is_none() && (!deck_cards.is_empty() || !commander_cards.is_empty()) {
+            self.pending_connect_deck = Some((system_seat_id, deck_cards, commander_cards));
+        }
+    }
+
+    pub fn register_zones_metadata(&mut self, zones: &[crate::parser::ZoneStateInfo]) {
+        self.deck_tracker
+            .register_zone_metadata(zones, self.player_seat_id);
+    }
+
+    pub fn apply_zones_snapshot(&mut self, zones: &[crate::parser::ZoneStateInfo]) {
+        self.deck_tracker
+            .apply_zones_update(zones, self.player_seat_id);
+    }
+
     pub fn handle_object_id_changed(&mut self, orig_id: u32, new_id: u32) {
+        self.deck_tracker.handle_object_id_changed(orig_id, new_id);
         if let Some(gid) = self.instance_map.get(&orig_id).copied() {
             self.instance_map.insert(new_id, gid);
         }
@@ -538,6 +1075,7 @@ impl MatchAssembler {
     }
 
     pub fn handle_deleted_instances(&mut self, deleted_ids: &[u32]) {
+        self.deck_tracker.handle_deleted_instances(deleted_ids);
         if self.current_turn == 0 && !self.opening_hand_finalized && !self.player_opening_hand.is_empty() {
             let deleted_hand_count = self.player_opening_hand.iter().filter(|(i, _)| deleted_ids.contains(i)).count();
             if deleted_hand_count > 0 && deleted_hand_count < 5 {
@@ -619,6 +1157,10 @@ impl MatchAssembler {
             }
             m.player_commander_id = commander_id;
         }
+        if !main_deck.is_empty() {
+            self.cached_main_deck = main_deck.clone();
+            self.deck_tracker.set_fallback_deck(&main_deck);
+        }
         for grp_id in main_deck {
             *self.player_cards_seen.entry(grp_id).or_insert(0) += 1;
         }
@@ -638,6 +1180,7 @@ impl MatchAssembler {
                 if let Some(m) = &mut self.active_match {
                     m.player_mulligans = Some(self.player_mulligans);
                 }
+                self.deck_tracker.handle_mulligan_reset(self.player_seat_id);
                 let cards_to_mulligan: Vec<u32> = self.player_opening_hand.drain(..).map(|(_, gid)| gid).collect();
                 for gid in cards_to_mulligan {
                     self.turn_events.push(MatchTurnEventRecord {
@@ -747,7 +1290,18 @@ impl MatchAssembler {
         }
 
         let resolved_grp_id = grp_id.or_else(|| self.instance_map.get(&instance_id).copied())?;
-        let seat_id = owner_seat.unwrap_or(self.player_seat_id);
+        let resolved_owner_seat = owner_seat.or_else(|| self.instance_owner_map.get(&instance_id).copied());
+        let seat_id = resolved_owner_seat.unwrap_or(self.player_seat_id);
+
+        self.deck_tracker.observe_game_object(
+            instance_id,
+            Some(resolved_grp_id),
+            Some(seat_id),
+            zone_id,
+            is_card,
+            is_token,
+            self.player_seat_id,
+        );
 
         let previous_zone = self.instance_zone_map.get(&instance_id).copied();
         self.instance_zone_map.insert(instance_id, zone_id);
@@ -2210,7 +2764,7 @@ impl MatchAssembler {
                         }
                     }
 
-                    for (grp, amt, life_before) in &lethal_hits {
+                    for (grp, _amt, life_before) in &lethal_hits {
                         if self.token_grp_ids.contains(grp) {
                             continue;
                         }
@@ -2337,9 +2891,21 @@ impl MatchAssembler {
             if self.is_live {
                 self.last_completed = Some((m.clone(), Utc::now()));
             }
+            self.pending_connect_deck = None;
             return Some((m, card_records, turn_events, impactful_records));
         }
         None
+    }
+
+    pub fn deck_tracker_grp_ids(&self) -> Vec<i64> {
+        self.deck_tracker.needed_grp_ids()
+    }
+
+    pub fn compute_live_deck_snapshot(
+        &self,
+        meta_map: &HashMap<i64, crate::card_db::CardMetadata>,
+    ) -> LiveDeckSnapshot {
+        self.deck_tracker.compute_snapshot(meta_map)
     }
 
     pub fn resolve_deck_from_match(&self, hero_cards: &[MatchCardRecord], commander_id: Option<u32>) -> Option<String> {
@@ -4012,5 +4578,179 @@ use super::*;
         // Crucially: A board wipe must NOT award Royal Assassin even though single-target annotations were emitted!
         assert_eq!(entry.creatures_eliminated, 0, "Board wipe with >3 creatures must not award creatures_eliminated");
         assert!(!entry.titles.iter().any(|t| t.starts_with("Royal Assassin")), "Board wipe must not receive Royal Assassin");
+    }
+
+    #[test]
+    fn test_live_deck_tracker_probabilities_mulligan_and_scry() {
+        use crate::card_db::CardMetadata;
+        use crate::parser::ZoneStateInfo;
+
+        let mut assembler = MatchAssembler::new();
+        assembler.start_match("m-draft-1".to_string(), "PremierDraft".to_string(), false);
+
+        // Simulate ConnectResp with a 10-card mini limited deck:
+        // 4x Island (grp 100), 3x Lightning Strike (grp 200), 2x Opt (grp 300), 1x Serra Angel (grp 400)
+        assembler.handle_connect_resp(
+            Some(2),
+            vec![100, 100, 100, 100, 200, 200, 200, 300, 300, 400],
+            vec![],
+        );
+        assert_eq!(assembler.player_seat_id, 2);
+
+        let mut meta_map = HashMap::new();
+        meta_map.insert(
+            100,
+            CardMetadata {
+                grp_id: 100,
+                name: "Island".to_string(),
+                mana_cost: None,
+                cmc: 0,
+                card_type: Some("Basic Land — Island".to_string()),
+                colors: None,
+                color_identity: Some("U".to_string()),
+                rarity: 1,
+                set_code: Some("FDN".to_string()),
+                collector_number: Some("275".to_string()),
+            },
+        );
+        meta_map.insert(
+            200,
+            CardMetadata {
+                grp_id: 200,
+                name: "Lightning Strike".to_string(),
+                mana_cost: Some("{1}{R}".to_string()),
+                cmc: 2,
+                card_type: Some("Instant".to_string()),
+                colors: Some("R".to_string()),
+                color_identity: Some("R".to_string()),
+                rarity: 2,
+                set_code: Some("FDN".to_string()),
+                collector_number: Some("100".to_string()),
+            },
+        );
+        meta_map.insert(
+            300,
+            CardMetadata {
+                grp_id: 300,
+                name: "Opt".to_string(),
+                mana_cost: Some("{U}".to_string()),
+                cmc: 1,
+                card_type: Some("Instant".to_string()),
+                colors: Some("U".to_string()),
+                color_identity: Some("U".to_string()),
+                rarity: 2,
+                set_code: Some("FDN".to_string()),
+                collector_number: Some("50".to_string()),
+            },
+        );
+        meta_map.insert(
+            400,
+            CardMetadata {
+                grp_id: 400,
+                name: "Serra Angel".to_string(),
+                mana_cost: Some("{3}{W}{W}".to_string()),
+                cmc: 5,
+                card_type: Some("Creature — Angel".to_string()),
+                colors: Some("W".to_string()),
+                color_identity: Some("W".to_string()),
+                rarity: 3,
+                set_code: Some("FDN".to_string()),
+                collector_number: Some("10".to_string()),
+            },
+        );
+
+        // Initial opening hand: 2x Opt (inst 1, 2) and 1x Island (inst 3) in Hand (zone 35)
+        // Remaining 7 cards in Library (zone 36: inst 4..=10)
+        let initial_zones = vec![
+            ZoneStateInfo {
+                zone_id: 35,
+                zone_type: "ZoneType_Hand".to_string(),
+                owner_seat_id: Some(2),
+                object_instance_ids: vec![1, 2, 3],
+                has_instance_ids_field: true,
+            },
+            ZoneStateInfo {
+                zone_id: 36,
+                zone_type: "ZoneType_Library".to_string(),
+                owner_seat_id: Some(2),
+                object_instance_ids: vec![4, 5, 6, 7, 8, 9, 10],
+                has_instance_ids_field: true,
+            },
+        ];
+        assembler.register_zones_metadata(&initial_zones);
+        assembler.process_game_object(1, Some(300), Some(2), 35, true, false, None);
+        assembler.process_game_object(2, Some(300), Some(2), 35, true, false, None);
+        assembler.process_game_object(3, Some(100), Some(2), 35, true, false, None);
+        assembler.apply_zones_snapshot(&initial_zones);
+
+        let snap1 = assembler.compute_live_deck_snapshot(&meta_map);
+        assert!(snap1.has_deck);
+        assert_eq!(snap1.total_library_cards, 7);
+        assert_eq!(snap1.initial_library_cards, 10);
+        // 3 Islands left, 4 non-lands left (3x Lightning Strike + 1x Serra Angel; 0x Opt left)
+        assert_eq!(snap1.total_remaining_lands, 3);
+        assert_eq!(snap1.total_remaining_non_lands, 4);
+        // Depleted card (Opt: 0 / 2) must be at the bottom of the sorted list
+        assert_eq!(snap1.cards.last().unwrap().grp_id, 300);
+        assert_eq!(snap1.cards.last().unwrap().remaining_count, 0);
+        assert_eq!(snap1.cards.last().unwrap().draw_probability, 0.0);
+        // Top cards have 3 remaining (Island CMC 0.0, then Lightning Strike CMC 2.0)
+        assert_eq!(snap1.cards[0].grp_id, 100);
+        assert_eq!(snap1.cards[1].grp_id, 200);
+
+        // Now simulate a London Mulligan where inst 2 (Opt) is put on the bottom of the library!
+        let post_bottom_zones = vec![
+            ZoneStateInfo {
+                zone_id: 35,
+                zone_type: "ZoneType_Hand".to_string(),
+                owner_seat_id: Some(2),
+                object_instance_ids: vec![1, 3],
+                has_instance_ids_field: true,
+            },
+            ZoneStateInfo {
+                zone_id: 36,
+                zone_type: "ZoneType_Library".to_string(),
+                owner_seat_id: Some(2),
+                object_instance_ids: vec![4, 5, 6, 7, 8, 9, 10, 11],
+                has_instance_ids_field: true,
+            },
+        ];
+        assembler.handle_deleted_instances(&[2]);
+        assembler.apply_zones_snapshot(&post_bottom_zones);
+
+        let snap2 = assembler.compute_live_deck_snapshot(&meta_map);
+        assert_eq!(snap2.total_library_cards, 8);
+        let opt_entry = snap2.cards.iter().find(|c| c.grp_id == 300).unwrap();
+        assert_eq!(opt_entry.remaining_count, 1, "Bottomed Opt should return to library");
+        assert!((opt_entry.draw_probability - 12.5).abs() < 0.01);
+
+        // Simulate Scry 1: inst 4 in Library is revealed as Serra Angel (grp 400) in ZoneType_Revealed (zone 50),
+        // but remains in ZoneType_Library.objectInstanceIds!
+        let scry_zones = vec![
+            ZoneStateInfo {
+                zone_id: 50,
+                zone_type: "ZoneType_Revealed".to_string(),
+                owner_seat_id: None,
+                object_instance_ids: vec![4],
+                has_instance_ids_field: true,
+            },
+            ZoneStateInfo {
+                zone_id: 36,
+                zone_type: "ZoneType_Library".to_string(),
+                owner_seat_id: Some(2),
+                object_instance_ids: vec![4, 5, 6, 7, 8, 9, 10, 11],
+                has_instance_ids_field: true,
+            },
+        ];
+        assembler.register_zones_metadata(&scry_zones);
+        assembler.process_game_object(4, Some(400), Some(2), 50, true, false, None);
+        assembler.apply_zones_snapshot(&scry_zones);
+
+        let snap3 = assembler.compute_live_deck_snapshot(&meta_map);
+        let angel_entry = snap3.cards.iter().find(|c| c.grp_id == 400).unwrap();
+        assert_eq!(
+            angel_entry.remaining_count, 1,
+            "Card revealed via scry while still in ZoneType_Library must still count as in library"
+        );
     }
 }

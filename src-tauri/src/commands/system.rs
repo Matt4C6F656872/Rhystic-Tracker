@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::Manager;
 use crate::db::{self, DatabaseManager};
 use crate::card_db;
