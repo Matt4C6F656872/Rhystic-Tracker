@@ -245,6 +245,12 @@ impl LiveDeckTrackerState {
         }
     }
 
+    pub fn reset_for_new_game(&mut self) {
+        self.seen_instance_grp.clear();
+        self.instance_current_zone.clear();
+        self.library_instance_ids = None;
+    }
+
     pub fn set_fallback_deck(&mut self, main_deck: &[u32]) {
         self.fallback_deck_counts.clear();
         for &grp_id in main_deck {
@@ -688,6 +694,7 @@ pub struct MatchAssembler {
     pub card_cmc_map: HashMap<u32, u32>, // grp_id -> cmc
     pub feed_seq: u64,
     pub current_turn: u32,
+    pub completed_games_turns: u32,
     pub turn_1_active_seat: Option<u32>,
     pub match_start_time: Option<chrono::DateTime<Utc>>,
     pub impactful_cards: HashMap<u32, CardDamageStats>, // grp_id -> CardDamageStats
@@ -756,6 +763,7 @@ impl MatchAssembler {
             card_cmc_map: HashMap::new(),
             feed_seq: 0,
             current_turn: 0,
+            completed_games_turns: 0,
             turn_1_active_seat: None,
             match_start_time: None,
             impactful_cards: HashMap::new(),
@@ -765,6 +773,56 @@ impl MatchAssembler {
             last_completed: None,
             is_live: false,
         }
+    }
+
+    fn default_life_for_format(format_name: &str) -> i32 {
+        let lower_fmt = format_name.to_lowercase();
+        let is_commander = lower_fmt.contains("commander") && !lower_fmt.contains("brawl");
+        let is_brawl = lower_fmt.contains("brawl") || is_commander;
+        if is_commander {
+            40
+        } else if is_brawl {
+            25
+        } else {
+            20
+        }
+    }
+
+    /// Resets per-game state (life totals, zone/instance maps, turn counters, opening hand buffer,
+    /// and processed GRE msg_ids) while preserving match-wide accumulators (`player_cards_seen`,
+    /// `opp_cards_seen`, `turn_events`, `impactful_cards`, `match_start_time`, etc.).
+    pub fn reset_per_game_state(&mut self, default_life: i32) {
+        self.evaluate_ironclad();
+        self.current_player_life = default_life;
+        self.current_opp_life = default_life;
+        self.opp_life_before_combat = default_life;
+        self.current_turn_hero_hits.clear();
+        self.last_hero_damage_hit = None;
+        self.player_opening_hand.clear();
+        self.opening_hand_finalized = false;
+        self.instance_map.clear();
+        self.instance_zone_map.clear();
+        self.instance_previous_zone_map.clear();
+        self.instance_owner_map.clear();
+        self.instance_controller_map.clear();
+        self.instance_flicker_pending.clear();
+        self.instance_reanimator_map.clear();
+        self.ability_parent_map.clear();
+        self.creature_instance_ids.clear();
+        self.token_instance_names.clear();
+        self.token_instance_ids.clear();
+        self.counted_token_instances.clear();
+        self.recorded_actions.clear();
+        self.seen_damage_annotation_ids.clear();
+        self.active_life_sources.clear();
+        self.turn_damage_taken_by_instance.clear();
+        self.turn_damage_to_seat.clear();
+        self.turn_mana_by_instance.clear();
+        self.token_spawner_map.clear();
+        self.instance_wipe_counts.clear();
+        self.processed_msg_ids.clear();
+        self.current_turn = 0;
+        self.deck_tracker.reset_for_new_game();
     }
 
     pub fn set_player_user_id(&mut self, user_id: String) {
@@ -798,55 +856,60 @@ impl MatchAssembler {
     }
 
     pub fn start_match(&mut self, match_id: String, format_name: String, assigned_deck_event: bool) {
-        let now = Utc::now();
         let lower_fmt = format_name.to_lowercase();
         let is_commander = lower_fmt.contains("commander") && !lower_fmt.contains("brawl");
         let is_brawl = lower_fmt.contains("brawl") || is_commander;
+        let default_life = Self::default_life_for_format(&format_name);
+
+        // If `start_match` is called again with the SAME `match_id` (e.g., duplicate
+        // `matchGameRoomStateChangedEvent` or Bo3 inter-game state transition),
+        // preserve match-wide accumulators (`match_start_time`, `player_cards_seen`,
+        // `opp_cards_seen`, `turn_events`, `impactful_cards`, and `deck_tracker`).
+        if self.active_match.as_ref().map(|m| m.match_id == match_id).unwrap_or(false) {
+            if let Some(m) = &mut self.active_match {
+                if !format_name.is_empty()
+                    && format_name != "Unknown"
+                    && (m.format_name.is_empty() || m.format_name == "Unknown")
+                {
+                    m.format_name = format_name;
+                    if self.current_turn == 0 && self.life_events.is_empty() {
+                        self.current_player_life = default_life;
+                        self.min_player_life = default_life;
+                        self.current_opp_life = default_life;
+                        self.opp_life_before_combat = default_life;
+                    }
+                }
+            }
+            if assigned_deck_event && !self.last_assigned_deck_event {
+                self.last_assigned_deck_event = true;
+                self.match_legitimate = false;
+            }
+            if let Some((seat, cards, cmds)) = self.pending_connect_deck.take() {
+                self.handle_connect_resp(seat, cards, cmds);
+            }
+            return;
+        }
+
+        let now = Utc::now();
         if !is_brawl {
             self.cached_commander_id = None;
         }
         self.last_assigned_deck_event = assigned_deck_event;
 
-        let default_life = if is_commander { 40 } else if is_brawl { 25 } else { 20 };
-
-        self.current_player_life = default_life;
+        self.reset_per_game_state(default_life);
         self.min_player_life = default_life;
-        self.current_opp_life = default_life;
-        self.opp_life_before_combat = default_life;
-        self.current_turn_hero_hits.clear();
         self.player_mulligans = 0;
         self.opponent_mulligans = 0;
-        self.player_opening_hand.clear();
-        self.opening_hand_finalized = false;
         self.player_cards_seen.clear();
         self.opp_cards_seen.clear();
-        self.instance_map.clear();
-        self.instance_zone_map.clear();
-        self.instance_owner_map.clear();
-        self.instance_controller_map.clear();
-        self.instance_flicker_pending.clear();
-        self.instance_reanimator_map.clear();
-        self.ability_parent_map.clear();
-        self.creature_instance_ids.clear();
-        self.token_instance_names.clear();
-        self.recorded_actions.clear();
         self.turn_events.clear();
         self.turn_event_seqs.clear();
         self.life_events.clear();
         self.damage_feed_events.clear();
-        self.seen_damage_annotation_ids.clear();
-        self.active_life_sources.clear();
         self.impactful_cards.clear();
-        self.instance_wipe_counts.clear();
         self.pending_counter_events.clear();
-        self.processed_msg_ids.clear();
-        self.token_instance_ids.clear();
         self.token_grp_ids.clear();
-        self.counted_token_instances.clear();
-        self.token_spawner_map.clear();
-        self.turn_mana_by_instance.clear();
-        self.turn_damage_to_seat.clear();
-        self.current_turn = 0;
+        self.completed_games_turns = 0;
         self.feed_seq = 0;
         self.player_seat_id = 1;
         self.collection_draws.clear();
@@ -1026,6 +1089,18 @@ impl MatchAssembler {
         deck_cards: Vec<u32>,
         commander_cards: Vec<u32>,
     ) {
+        if self.active_match.is_some() && self.current_turn > 0 && !deck_cards.is_empty() {
+            // Best-of-3 Game 2 / Game 3 connection: finalize prior game's hand, accumulate turns,
+            // and reset per-game tracking maps while keeping match-wide accumulators intact.
+            self.finalize_opening_hand();
+            self.completed_games_turns += self.current_turn;
+            let default_life = self
+                .active_match
+                .as_ref()
+                .map(|m| Self::default_life_for_format(&m.format_name))
+                .unwrap_or(20);
+            self.reset_per_game_state(default_life);
+        }
         if let Some(seat) = system_seat_id.filter(|&s| s > 0) {
             self.set_local_player_seat(seat);
         }
@@ -2613,6 +2688,19 @@ impl MatchAssembler {
     }
 
     pub fn update_game_state(&mut self, msg_id: Option<u64>, turn: u32, life_by_seat: &[(u32, i32)], active_seat: u32) {
+        // Detect Best-of-3 Game 2 / Game 3 transition when Turn 1 begins after a previous game reached Turn > 1
+        // (checked before `processed_msg_ids` because GRE resets `msgId` sequence on each new game).
+        if turn == 1 && self.current_turn > 1 {
+            self.finalize_opening_hand();
+            self.completed_games_turns += self.current_turn;
+            let default_life = self
+                .active_match
+                .as_ref()
+                .map(|m| Self::default_life_for_format(&m.format_name))
+                .unwrap_or(20);
+            self.reset_per_game_state(default_life);
+        }
+
         if let Some(mid) = msg_id {
             if self.processed_msg_ids.contains(&mid) {
                 return;
@@ -2693,7 +2781,7 @@ impl MatchAssembler {
         if let Some(mut m) = self.active_match.take() {
             let is_win = winning_team_id == self.player_seat_id;
             m.result = if is_win { "win".to_string() } else { "loss".to_string() };
-            m.turns = self.current_turn;
+            m.turns = self.completed_games_turns + self.current_turn;
             m.player_life_end = Some(self.current_player_life);
             m.min_player_life = Some(self.min_player_life);
             m.opponent_life_end = Some(self.current_opp_life);
@@ -4754,5 +4842,67 @@ use super::*;
             angel_entry.remaining_count, 1,
             "Card revealed via scry while still in ZoneType_Library must still count as in library"
         );
+    }
+
+    #[test]
+    fn test_duplicate_start_match_preserves_state_and_new_match_resets_all_maps() {
+        let mut assembler = MatchAssembler::new();
+        assembler.start_match("match-uuid-1".to_string(), "Unknown".to_string(), false);
+        assembler.handle_connect_resp(Some(1), vec![101, 101, 102, 103], vec![]);
+
+        // Advance to Turn 2, play a card, deal damage, and populate internal tracking maps
+        assembler.update_game_state(Some(10), 2, &[(1, 20), (2, 17)], 1);
+        assembler.process_game_object(500, Some(101), Some(1), 28, true, false, None);
+        assembler.process_damage_event(1, 500, 2, 3, 1);
+        assembler.instance_previous_zone_map.insert(500, 31);
+        assembler.turn_damage_taken_by_instance.insert(500, 4);
+
+        let initial_start_time = assembler.match_start_time;
+        assert_eq!(assembler.player_cards_seen.get(&101), Some(&1));
+        assert!(!assembler.turn_events.is_empty());
+        assert!(!assembler.impactful_cards.is_empty());
+        assert!(assembler.last_hero_damage_hit.is_some());
+        assert_eq!(assembler.deck_tracker.connect_deck_counts.get(&101), Some(&2));
+
+        // 1. Duplicate `start_match` with the SAME `match_id` (and resolved format name)
+        assembler.start_match("match-uuid-1".to_string(), "Traditional_Standard".to_string(), false);
+
+        assert_eq!(
+            assembler.active_match.as_ref().map(|m| m.format_name.as_str()),
+            Some("Traditional_Standard"),
+            "Duplicate start_match should upgrade 'Unknown' format_name"
+        );
+        assert_eq!(assembler.match_start_time, initial_start_time, "match_start_time must be preserved");
+        assert_eq!(assembler.player_cards_seen.get(&101), Some(&1), "player_cards_seen must be preserved");
+        assert!(!assembler.turn_events.is_empty(), "turn_events must be preserved");
+        assert!(!assembler.impactful_cards.is_empty(), "impactful_cards must be preserved");
+        assert_eq!(
+            assembler.deck_tracker.connect_deck_counts.get(&101),
+            Some(&2),
+            "deck_tracker connect_deck_counts must be preserved"
+        );
+
+        // 2. Simulate Best-of-3 Game 2 transition (Turn 1 after Game 1 was at Turn 2, with msg_id 10 reused by GRE)
+        assembler.update_game_state(Some(10), 1, &[(1, 20), (2, 20)], 2);
+        assert_eq!(assembler.completed_games_turns, 2, "Game 1 turns must be accumulated into completed_games_turns");
+        assert_eq!(assembler.current_turn, 1, "Game 2 current_turn must reset to 1");
+        assert_eq!(assembler.current_opp_life, 20, "Opponent life must reset to 20 for Game 2");
+        assert!(assembler.instance_map.is_empty(), "Per-game instance_map must be cleared for Game 2");
+        assert!(assembler.last_hero_damage_hit.is_none(), "last_hero_damage_hit must be cleared for Game 2");
+        assert_eq!(assembler.player_cards_seen.get(&101), Some(&1), "Match-wide player_cards_seen must survive into Game 2");
+
+        // 3. Starting a genuinely NEW `match_id` must wipe all per-match and per-game maps completely
+        assembler.instance_previous_zone_map.insert(777, 28);
+        assembler.turn_damage_taken_by_instance.insert(777, 5);
+        assembler.last_hero_damage_hit = Some((101, 5, 15));
+
+        assembler.start_match("match-uuid-2".to_string(), "Standard".to_string(), false);
+        assert!(assembler.player_cards_seen.is_empty(), "New match_id must clear player_cards_seen");
+        assert!(assembler.turn_events.is_empty(), "New match_id must clear turn_events");
+        assert!(assembler.impactful_cards.is_empty(), "New match_id must clear impactful_cards");
+        assert!(assembler.instance_previous_zone_map.is_empty(), "New match_id must clear instance_previous_zone_map");
+        assert!(assembler.turn_damage_taken_by_instance.is_empty(), "New match_id must clear turn_damage_taken_by_instance");
+        assert!(assembler.last_hero_damage_hit.is_none(), "New match_id must clear last_hero_damage_hit");
+        assert_eq!(assembler.completed_games_turns, 0, "New match_id must reset completed_games_turns");
     }
 }
