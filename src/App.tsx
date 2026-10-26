@@ -550,23 +550,34 @@ export default function App() {
   }, [selectedDeckName]);
 
   const [commanderInfo, setCommanderInfo] = useState<{ player_commander: any; opponent_commander: any } | null>(null);
+  const prevSelectedMatchIdRef = useRef<string | null>(null);
 
   // Load cards and commander metadata for selected match via Tauri IPC
   useEffect(() => {
+    let cancelled = false;
+
     if (!selectedMatchId) {
+      prevSelectedMatchIdRef.current = null;
       setSelectedMatchCards([]);
       setImpactfulCards([]);
       setCommanderInfo(null);
       return;
     }
-    // Clear previous match data immediately to prevent card art flash
-    setSelectedMatchCards([]);
-    setImpactfulCards([]);
-    setCommanderInfo(null);
+
+    const isMatchSwitch = prevSelectedMatchIdRef.current !== selectedMatchId;
+    prevSelectedMatchIdRef.current = selectedMatchId;
+
+    // Only clear previous match data when switching to a different match (prevents UI flicker on background refreshes)
+    if (isMatchSwitch) {
+      setSelectedMatchCards([]);
+      setImpactfulCards([]);
+      setCommanderInfo(null);
+    }
 
     const fetchMatchCards = async () => {
       try {
         const cards = await invoke<CardItem[]>('get_match_cards', { matchId: selectedMatchId });
+        if (cancelled) return;
         setSelectedMatchCards(cards);
 
         const currentMatch = matches.find(m => m.match_id === selectedMatchId);
@@ -575,24 +586,36 @@ export default function App() {
             playerCommanderId: currentMatch.player_commander_id ?? null,
             opponentCommanderId: currentMatch.opponent_commander_id ?? null
           });
+          if (cancelled) return;
           setCommanderInfo(commanderInfoRes);
         }
 
         // Fetch impactful cards (cards that dealt damage / caused life swings).
         try {
           const impactfulRes = await invoke<any>('get_impactful_cards', { matchId: selectedMatchId });
+          if (cancelled) return;
           const impactful = (impactfulRes && impactfulRes.cards) ? impactfulRes.cards : [];
           setImpactfulCards(impactful);
-          setImpactfulIndex(0);
+          if (isMatchSwitch) {
+            setImpactfulIndex(0);
+          }
         } catch (e) {
-          console.error('Failed to fetch impactful cards:', e);
-          setImpactfulCards([]);
+          if (!cancelled) {
+            console.error('Failed to fetch impactful cards:', e);
+            setImpactfulCards([]);
+          }
         }
       } catch (e) {
-        console.error('Failed to fetch match cards:', e);
+        if (!cancelled) {
+          console.error('Failed to fetch match cards:', e);
+        }
       }
     };
     fetchMatchCards();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedMatchId, matches]);
 
   // Impactful cards carousel: cycle through cards on a timer.

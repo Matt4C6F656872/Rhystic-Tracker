@@ -84,12 +84,16 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
   // Determine who went first: true if Hero went first, false if Opponent went first
   const firstPlayerIsHero = liveMatchState?.going_first !== false;
 
-  // Max starting life based on format
+  // Max starting life based on format (40 for Commander, 25 for Brawl, 20 for standard formats),
+  // scaled up dynamically if either player's current life exceeds starting life.
   const formatLower = liveMatchState?.format?.toLowerCase() || '';
-  const maxLife = formatLower.includes('brawl') || formatLower.includes('commander') ? 25 : 20;
+  const isCommanderFormat = formatLower.includes('commander') && !formatLower.includes('brawl');
+  const isBrawlFormat = formatLower.includes('brawl');
+  const defaultMaxLife = isCommanderFormat ? 40 : isBrawlFormat ? 25 : 20;
 
-  const playerLife = liveMatchState?.player_life ?? 20;
-  const opponentLife = liveMatchState?.opponent_life ?? 20;
+  const playerLife = liveMatchState?.player_life ?? defaultMaxLife;
+  const opponentLife = liveMatchState?.opponent_life ?? defaultMaxLife;
+  const maxLife = Math.max(defaultMaxLife, playerLife, opponentLife);
 
   const playerLifePct = Math.min(100, Math.max(0, (playerLife / maxLife) * 100));
   const opponentLifePct = Math.min(100, Math.max(0, (opponentLife / maxLife) * 100));

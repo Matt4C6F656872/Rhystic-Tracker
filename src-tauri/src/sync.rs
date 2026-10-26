@@ -33,9 +33,21 @@ pub struct SyncConfig {
     /// Target ingestion server URL.
     #[serde(default = "default_server_url")]
     pub server_url: String,
-    /// Whether to include the hero's seen card grp_ids for archetype/Commander clustering.
+    /// Whether to include the hero's seen card grp_ids & combat telemetry.
     #[serde(default = "default_true")]
     pub include_deck_cards: bool,
+    /// Whether to include the full submitted decklist (`grp_id` + quantities) for archetype & flex-slot win rates.
+    #[serde(default = "default_true")]
+    pub share_full_decklist: bool,
+    /// Whether to include the log-verified Arena handle & seasonal rank for Global Player Leaderboards (Tier 3).
+    #[serde(default)]
+    pub share_player_identity: bool,
+    /// Read-only Arena handle verified from MTGA `Player.log` (`AuthenticateResponse`), stripped of `#12345` tag.
+    #[serde(default)]
+    pub verified_arena_handle: Option<String>,
+    /// Cryptographic account hash bound to the log-verified `client_id` + `screen_name` so handles cannot be spoofed.
+    #[serde(default)]
+    pub arena_account_hash: Option<String>,
     /// Optional Tier 2 cross-device sync key for web/iPad companion linking.
     #[serde(default)]
     pub sync_key: Option<String>,
@@ -56,7 +68,76 @@ impl Default for SyncConfig {
             contributor_id: generate_anonymous_uuid(),
             server_url: default_server_url(),
             include_deck_cards: true,
+            share_full_decklist: true,
+            share_player_identity: false,
+            verified_arena_handle: None,
+            arena_account_hash: None,
             sync_key: None,
+        }
+    }
+}
+
+/// Record the log-verified MTGA `screen_name` and `client_id` parsed from `AuthenticateResponse`.
+/// Strips the `#12345` discriminator tag for public display and computes an unspoofable account hash.
+pub fn record_verified_arena_identity(raw_screen_name: &str, raw_client_id: &str) {
+    let trimmed_name = raw_screen_name.trim();
+    if trimmed_name.is_empty() || trimmed_name.eq_ignore_ascii_case("REDACTED_USER") {
+        return;
+    }
+    let handle = trimmed_name
+        .split('#')
+        .next()
+        .unwrap_or(trimmed_name)
+        .trim()
+        .to_string();
+    if handle.is_empty() {
+        return;
+    }
+    let account_hash = anonymize_match_id(
+        "rhystic-verified-arena-account-v1",
+        &format!("{}:{}", raw_client_id.trim(), trimmed_name),
+    );
+
+    let mut cfg = load_sync_config();
+    if cfg.verified_arena_handle.as_deref() != Some(handle.as_str())
+        || cfg.arena_account_hash.as_deref() != Some(account_hash.as_str())
+    {
+        cfg.verified_arena_handle = Some(handle);
+        cfg.arena_account_hash = Some(account_hash);
+        let _ = save_sync_config(&cfg);
+    }
+}
+
+/// Scans the beginning of the active `Player.log` for `authenticateResponse` if
+/// `verified_arena_handle` has not yet been captured in `SyncConfig`.
+pub fn ensure_verified_identity_from_log(log_path: &str) {
+    let cfg = load_sync_config();
+    if cfg.verified_arena_handle.is_some() && cfg.arena_account_hash.is_some() {
+        return;
+    }
+    if log_path.trim().is_empty() {
+        return;
+    }
+    use std::io::{BufRead, BufReader};
+    let Ok(file) = std::fs::File::open(log_path) else {
+        return;
+    };
+    let reader = BufReader::new(file);
+    let mut bytes_read = 0usize;
+    for line in reader.lines().take(60_000).flatten() {
+        bytes_read += line.len();
+        if bytes_read > 16 * 1024 * 1024 {
+            break;
+        }
+        if line.contains("authenticateResponse") || line.contains("AuthenticateResponse") {
+            if let crate::parser::ParsedEvent::Auth {
+                screen_name,
+                client_id,
+            } = crate::parser::parse_line(&line)
+            {
+                record_verified_arena_identity(&screen_name, &client_id);
+                return;
+            }
         }
     }
 }
@@ -120,6 +201,18 @@ pub struct SyncCardEntry {
     pub grp_id: u32,
     pub is_opponent: bool,
     pub count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncDeckCardEntry {
+    pub grp_id: u32,
+    pub count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card_name: Option<String>,
+    #[serde(default)]
+    pub is_basic_land: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,10 +225,14 @@ pub struct SyncImpactfulEntry {
     pub cards_drawn: i64,
     pub counters_added: i64,
     pub titles: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card_name: Option<String>,
 }
 
-/// Anonymized match telemetry payload queued into `sync_outbox`.
-/// Contains ZERO player names, opponent screen names, or raw account IDs.
+/// Match telemetry payload queued into `sync_outbox`.
+/// By default (Tier 1), contains ZERO player names, opponent screen names, or raw account IDs.
+/// When the user explicitly opts into `share_player_identity` (Tier 3), includes their
+/// log-verified `player_handle` (stripped of `#12345`), `player_account_hash`, and `player_rank`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnonymizedMatchPayload {
     pub schema_version: u32,
@@ -149,12 +246,30 @@ pub struct AnonymizedMatchPayload {
     pub turns: u32,
     pub going_first: bool,
     pub hero_commander_id: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hero_commander_name: Option<String>,
     pub opponent_commander_id: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opponent_commander_name: Option<String>,
     pub hero_life_end: Option<i32>,
     pub hero_min_life: Option<i32>,
     pub opponent_life_end: Option<i32>,
     pub hero_mulligans: u32,
     pub opponent_mulligans: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_handle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_account_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_rank: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deck_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archetype_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_identity: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deck_cards: Vec<SyncDeckCardEntry>,
     pub cards_seen: Vec<SyncCardEntry>,
     pub impactful_cards: Vec<SyncImpactfulEntry>,
 }
@@ -212,6 +327,7 @@ pub fn build_anonymized_payload(
                 grp_id: c.grp_id,
                 is_opponent: c.is_opponent,
                 count: c.count,
+                card_name: None,
             })
             .collect()
     } else {
@@ -222,6 +338,7 @@ pub fn build_anonymized_payload(
                 grp_id: c.grp_id,
                 is_opponent: true,
                 count: c.count,
+                card_name: None,
             })
             .collect()
     };
@@ -238,8 +355,18 @@ pub fn build_anonymized_payload(
             cards_drawn: i.cards_drawn,
             counters_added: i.counters_added,
             titles: i.titles.clone(),
+            card_name: None,
         })
         .collect();
+
+    let (player_handle, player_account_hash) = if config.share_player_identity {
+        (
+            config.verified_arena_handle.clone(),
+            config.arena_account_hash.clone(),
+        )
+    } else {
+        (None, None)
+    };
 
     Some(AnonymizedMatchPayload {
         schema_version: PAYLOAD_SCHEMA_VERSION,
@@ -253,12 +380,21 @@ pub fn build_anonymized_payload(
         turns: record.turns,
         going_first: record.going_first,
         hero_commander_id: record.player_commander_id,
+        hero_commander_name: None,
         opponent_commander_id: record.opponent_commander_id,
+        opponent_commander_name: None,
         hero_life_end: record.player_life_end,
         hero_min_life: record.min_player_life,
         opponent_life_end: record.opponent_life_end,
         hero_mulligans: record.player_mulligans.unwrap_or(0),
         opponent_mulligans: record.opponent_mulligans.unwrap_or(0),
+        player_handle,
+        player_account_hash,
+        player_rank: None,
+        deck_hash: None,
+        archetype_hash: None,
+        color_identity: None,
+        deck_cards: Vec::new(),
         cards_seen,
         impactful_cards,
     })
@@ -351,6 +487,334 @@ pub async fn get_outbox_stats(db: &DatabaseManager) -> OutboxStats {
     }
 }
 
+pub fn is_basic_land_name(name: &str) -> bool {
+    let trimmed = name.trim();
+    let base = trimmed.strip_prefix("Snow-Covered ").unwrap_or(trimmed);
+    matches!(
+        base,
+        "Plains" | "Island" | "Swamp" | "Mountain" | "Forest" | "Wastes"
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct StoredDeckCard {
+    grp_id: u32,
+    count: u32,
+}
+
+/// Enriches a payload using local SQLite caches (`cards_cache`, `deck_lists`, `player_rank_snapshots`).
+pub async fn enrich_payload_from_db(
+    db: &DatabaseManager,
+    config: &SyncConfig,
+    record: &MatchRecord,
+    payload: &mut AnonymizedMatchPayload,
+) {
+    let pool = db.pool();
+
+    // 1. Pre-load stored decklist cards if share_full_decklist is enabled so we can include their grp_ids
+    let mut stored_deck_cards: Vec<StoredDeckCard> = Vec::new();
+    if config.share_full_decklist {
+        let deck_name = record.player_deck_name.trim();
+        if !deck_name.is_empty() {
+            if let Ok(Some(dl_row)) =
+                sqlx::query("SELECT cards_json FROM deck_lists WHERE deck_name = ? LIMIT 1")
+                    .bind(deck_name)
+                    .fetch_optional(pool)
+                    .await
+            {
+                let raw_json: String = dl_row.try_get("cards_json").unwrap_or_default();
+                if let Ok(stored) = serde_json::from_str::<Vec<StoredDeckCard>>(&raw_json) {
+                    stored_deck_cards = stored
+                        .into_iter()
+                        .filter(|item| item.grp_id > 0 && item.count > 0)
+                        .collect();
+                }
+            }
+        }
+    }
+
+    // 2. Collect only the unique grp_ids needed for this match and query cards_cache with WHERE grp_id IN (...)
+    let mut needed_grp_ids: Vec<u32> = Vec::new();
+    if let Some(cmd_id) = payload.hero_commander_id {
+        if cmd_id > 0 {
+            needed_grp_ids.push(cmd_id);
+        }
+    }
+    if let Some(opp_cmd_id) = payload.opponent_commander_id {
+        if opp_cmd_id > 0 {
+            needed_grp_ids.push(opp_cmd_id);
+        }
+    }
+    for sc in &payload.cards_seen {
+        if sc.grp_id > 0 {
+            needed_grp_ids.push(sc.grp_id);
+        }
+    }
+    for ic in &payload.impactful_cards {
+        if ic.grp_id > 0 {
+            needed_grp_ids.push(ic.grp_id);
+        }
+    }
+    for item in &stored_deck_cards {
+        if item.grp_id > 0 {
+            needed_grp_ids.push(item.grp_id);
+        }
+    }
+    needed_grp_ids.sort_unstable();
+    needed_grp_ids.dedup();
+
+    let mut card_meta: std::collections::HashMap<u32, (String, String)> =
+        std::collections::HashMap::with_capacity(needed_grp_ids.len());
+    for chunk in needed_grp_ids.chunks(100) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query_str = format!(
+            "SELECT grp_id, name, colors, color_identity FROM cards_cache WHERE grp_id IN ({})",
+            placeholders
+        );
+        let mut q = sqlx::query(&query_str);
+        for &gid in chunk {
+            q = q.bind(gid as i64);
+        }
+        if let Ok(cache_rows) = q.fetch_all(pool).await {
+            for cr in cache_rows {
+                let gid = cr.try_get::<i64, _>("grp_id").unwrap_or(0) as u32;
+                if gid > 0 {
+                    let name: String = cr.try_get("name").unwrap_or_default();
+                    let ci: String = cr
+                        .try_get::<Option<String>, _>("color_identity")
+                        .ok()
+                        .flatten()
+                        .or_else(|| cr.try_get::<Option<String>, _>("colors").ok().flatten())
+                        .unwrap_or_default();
+                    card_meta.insert(gid, (name, ci));
+                }
+            }
+        }
+    }
+
+    // 3. Populate commander names & seen/impactful card names
+    if let Some(cmd_id) = payload.hero_commander_id {
+        if let Some((name, _)) = card_meta.get(&cmd_id) {
+            if !name.is_empty() {
+                payload.hero_commander_name = Some(name.clone());
+            }
+        }
+    }
+    if let Some(opp_cmd_id) = payload.opponent_commander_id {
+        if let Some((name, _)) = card_meta.get(&opp_cmd_id) {
+            if !name.is_empty() {
+                payload.opponent_commander_name = Some(name.clone());
+            }
+        }
+    }
+
+    for sc in &mut payload.cards_seen {
+        if let Some((name, _)) = card_meta.get(&sc.grp_id) {
+            if !name.is_empty() {
+                sc.card_name = Some(name.clone());
+            }
+        }
+    }
+    for ic in &mut payload.impactful_cards {
+        if let Some((name, _)) = card_meta.get(&ic.grp_id) {
+            if !name.is_empty() {
+                ic.card_name = Some(name.clone());
+            }
+        }
+    }
+
+    // 4. Populate verified player rank if share_player_identity is enabled
+    if config.share_player_identity {
+        if let Ok(Some(rank_row)) = sqlx::query(
+            "SELECT constructed_tier, constructed_level, limited_tier, limited_level FROM player_rank_snapshots ORDER BY id DESC LIMIT 1",
+        )
+        .fetch_optional(pool)
+        .await
+        {
+            let fmt_lower = record.format_name.to_ascii_lowercase();
+            let is_lim = fmt_lower.contains("draft")
+                || fmt_lower.contains("sealed")
+                || fmt_lower.contains("limited");
+            let (tier, level): (String, i64) = if is_lim {
+                (
+                    rank_row.try_get("limited_tier").unwrap_or_default(),
+                    rank_row.try_get("limited_level").unwrap_or(0),
+                )
+            } else {
+                (
+                    rank_row.try_get("constructed_tier").unwrap_or_default(),
+                    rank_row.try_get("constructed_level").unwrap_or(0),
+                )
+            };
+            if !tier.is_empty() && !tier.eq_ignore_ascii_case("Unranked") {
+                payload.player_rank = Some(if level > 0 {
+                    format!("{} {}", tier, level)
+                } else {
+                    tier
+                });
+            }
+        }
+    }
+
+    // 5. Populate full decklist, color identity, deck_hash, and archetype_hash if share_full_decklist is enabled
+    if config.share_full_decklist {
+        let mut deck_entries: Vec<SyncDeckCardEntry> = Vec::new();
+        for item in stored_deck_cards {
+            let cname = card_meta.get(&item.grp_id).map(|(n, _)| n.clone());
+            let is_basic = cname.as_deref().map(is_basic_land_name).unwrap_or(false);
+            deck_entries.push(SyncDeckCardEntry {
+                grp_id: item.grp_id,
+                count: item.count,
+                card_name: cname,
+                is_basic_land: is_basic,
+            });
+        }
+
+        // Fallback to hero's seen cards if no stored deck_lists row was found
+        if deck_entries.is_empty() {
+            for sc in &payload.cards_seen {
+                if !sc.is_opponent && sc.grp_id > 0 && sc.count > 0 {
+                    let is_basic = sc
+                        .card_name
+                        .as_deref()
+                        .map(is_basic_land_name)
+                        .unwrap_or(false);
+                    deck_entries.push(SyncDeckCardEntry {
+                        grp_id: sc.grp_id,
+                        count: sc.count,
+                        card_name: sc.card_name.clone(),
+                        is_basic_land: is_basic,
+                    });
+                }
+            }
+        }
+
+        if !deck_entries.is_empty() {
+            // Compute canonical WUBRG color identity
+            let mut has_w = false;
+            let mut has_u = false;
+            let mut has_b = false;
+            let mut has_r = false;
+            let mut has_g = false;
+            for de in &deck_entries {
+                if let Some((name, ci)) = card_meta.get(&de.grp_id) {
+                    for ch in ci.chars() {
+                        match ch.to_ascii_uppercase() {
+                            'W' => has_w = true,
+                            'U' => has_u = true,
+                            'B' => has_b = true,
+                            'R' => has_r = true,
+                            'G' => has_g = true,
+                            _ => {}
+                        }
+                    }
+                    // Also infer from basic land name if color_identity was empty
+                    match name.as_str() {
+                        "Plains" | "Snow-Covered Plains" => has_w = true,
+                        "Island" | "Snow-Covered Island" => has_u = true,
+                        "Swamp" | "Snow-Covered Swamp" => has_b = true,
+                        "Mountain" | "Snow-Covered Mountain" => has_r = true,
+                        "Forest" | "Snow-Covered Forest" => has_g = true,
+                        _ => {}
+                    }
+                }
+            }
+            let mut ci_str = String::new();
+            if has_w {
+                ci_str.push('W');
+            }
+            if has_u {
+                ci_str.push('U');
+            }
+            if has_b {
+                ci_str.push('B');
+            }
+            if has_r {
+                ci_str.push('R');
+            }
+            if has_g {
+                ci_str.push('G');
+            }
+            if ci_str.is_empty() {
+                ci_str.push('C');
+            }
+            payload.color_identity = Some(ci_str.clone());
+
+            // Layer 1: Exact deck_hash (collapsing basic land printings by canonical name)
+            let mut canonical_pairs: Vec<(String, u32)> = Vec::new();
+            for de in &deck_entries {
+                let key = if let Some(ref n) = de.card_name {
+                    if !n.is_empty() {
+                        n.to_ascii_lowercase()
+                    } else {
+                        format!("grp:{}", de.grp_id)
+                    }
+                } else {
+                    format!("grp:{}", de.grp_id)
+                };
+                canonical_pairs.push((key, de.count));
+            }
+            canonical_pairs.sort_by(|a, b| a.0.cmp(&b.0));
+            // Merge identical canonical card names (e.g., two different Mountain printings)
+            let mut merged_pairs: Vec<(String, u32)> = Vec::new();
+            for (k, c) in canonical_pairs {
+                if let Some(last) = merged_pairs.last_mut() {
+                    if last.0 == k {
+                        last.1 += c;
+                        continue;
+                    }
+                }
+                merged_pairs.push((k, c));
+            }
+            let deck_sig: String = merged_pairs
+                .iter()
+                .map(|(k, c)| format!("{}x{}", c, k))
+                .collect::<Vec<_>>()
+                .join("|");
+            let full_hash = anonymize_match_id("rhystic-deck-v1", &deck_sig);
+            payload.deck_hash = Some(format!("dh_{}", &full_hash[..16]));
+
+            // Layer 2/3/4: Archetype cluster hash
+            let fmt_lower = record.format_name.to_ascii_lowercase();
+            let arch_hash = if let Some(cmd_id) = payload.hero_commander_id.filter(|&id| id > 0) {
+                format!("cmd_{}", cmd_id)
+            } else if fmt_lower.contains("draft")
+                || fmt_lower.contains("sealed")
+                || fmt_lower.contains("limited")
+            {
+                format!("lim_{}_{}", fmt_lower.replace(' ', "_"), ci_str)
+            } else {
+                // Constructed 60-card: core signature from non-basic cards (sorted by copy count DESC, name ASC, top 8)
+                let mut core_cards: Vec<(String, u32)> = deck_entries
+                    .iter()
+                    .filter(|d| !d.is_basic_land)
+                    .map(|d| {
+                        let k = d
+                            .card_name
+                            .as_deref()
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_ascii_lowercase())
+                            .unwrap_or_else(|| format!("grp:{}", d.grp_id));
+                        (k, d.count)
+                    })
+                    .collect();
+                core_cards.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+                core_cards.truncate(6);
+                core_cards.sort_by(|a, b| a.0.cmp(&b.0));
+                let core_sig: String = core_cards
+                    .iter()
+                    .map(|(k, _)| k.as_str())
+                    .collect::<Vec<_>>()
+                    .join("|");
+                let ch = anonymize_match_id("rhystic-arch-v1", &core_sig);
+                format!("arch_{}_{}", ci_str, &ch[..10])
+            };
+            payload.archetype_hash = Some(arch_hash);
+            payload.deck_cards = deck_entries;
+        }
+    }
+}
+
 /// Enqueue a completed match into `sync_outbox` if `config.enabled` is true
 /// and the match is eligible. Returns `Ok(true)` if a new row was queued.
 pub async fn enqueue_match(
@@ -364,9 +828,12 @@ pub async fn enqueue_match(
     if !config.enabled {
         return Ok(false);
     }
-    let Some(payload) = build_anonymized_payload(config, record, cards, impactful, preset_or_assigned) else {
+    let Some(mut payload) =
+        build_anonymized_payload(config, record, cards, impactful, preset_or_assigned)
+    else {
         return Ok(false);
     };
+    enrich_payload_from_db(db, config, record, &mut payload).await;
     let payload_json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
     let now = Utc::now().to_rfc3339();
 
@@ -389,6 +856,7 @@ pub async fn enqueue_match(
 
 /// Backfill historical eligible matches from local SQLite into `sync_outbox`
 /// when a user opts in and clicks "Queue Match History for Sync".
+#[allow(dead_code)]
 pub async fn enqueue_historical_matches(
     db: &DatabaseManager,
     config: &SyncConfig,
@@ -534,6 +1002,197 @@ pub async fn enqueue_historical_matches(
     }
 
     Ok(queued)
+}
+
+/// Re-builds and enriches all eligible historical matches in `matches` using the
+/// current `SyncConfig` (card names, full decklists, archetype hashes, verified player handle/rank)
+/// and upserts them into `sync_outbox` as `'pending'` so updated sharing tiers propagate to the server.
+pub async fn refresh_historical_outbox(
+    db: &DatabaseManager,
+    config: &SyncConfig,
+) -> Result<usize, String> {
+    let pool = db.pool();
+
+    let _ = sqlx::query(
+        r#"
+        DELETE FROM sync_outbox
+        WHERE LOWER(payload_json) LIKE '%"format":"alchemy%'
+           OR LOWER(payload_json) LIKE '%"format":"dualcolorprecon%'
+           OR LOWER(payload_json) LIKE '%"format":"bot match"%'
+        "#,
+    )
+    .execute(pool)
+    .await;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT m.id, m.timestamp, m.date_str, m.format, m.result, m.duration_seconds,
+               m.turns, m.going_first, m.hero_seat_id, m.hero_deck_name,
+               m.hero_commander_id, m.hero_life_end, m.hero_min_life, m.hero_mulligans,
+               m.opponent_commander_id, m.opponent_mulligans, m.opponent_life_end,
+               m.result_reason, COALESCE(d.preset_deck, 0) as preset_deck
+        FROM matches m
+        LEFT JOIN match_decks d ON d.match_id = m.id
+        WHERE m.format != 'Bot Match'
+          AND LOWER(m.format) NOT LIKE '%alchemy%'
+          AND LOWER(m.format) NOT LIKE '%dualcolorprecon%'
+          AND COALESCE(d.preset_deck, 0) = 0
+        ORDER BY m.timestamp ASC
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mut refreshed = 0usize;
+    let now = Utc::now().to_rfc3339();
+    let mut forced_cfg = config.clone();
+    forced_cfg.enabled = true;
+
+    for r in rows {
+        let match_id: String = r.get("id");
+        let ts_raw: String = r.get("timestamp");
+        let parsed_ts = chrono::DateTime::parse_from_rfc3339(&ts_raw)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now());
+
+        let record = MatchRecord {
+            match_id: match_id.clone(),
+            timestamp: parsed_ts,
+            date_str: r.get("date_str"),
+            format_name: r.get("format"),
+            result: r.get("result"),
+            duration_seconds: r.get::<i64, _>("duration_seconds").max(0) as u32,
+            turns: r.get::<i64, _>("turns").max(0) as u32,
+            going_first: r.get("going_first"),
+            hero_seat_id: r.try_get::<i64, _>("hero_seat_id").unwrap_or(1) as u32,
+            player_deck_name: r
+                .try_get::<Option<String>, _>("hero_deck_name")
+                .ok()
+                .flatten()
+                .unwrap_or_default(),
+            player_commander_id: r
+                .try_get::<Option<i64>, _>("hero_commander_id")
+                .ok()
+                .flatten()
+                .map(|v| v as u32),
+            player_commander_name: None,
+            player_life_end: r.try_get("hero_life_end").ok(),
+            player_mulligans: r
+                .try_get::<Option<i64>, _>("hero_mulligans")
+                .ok()
+                .flatten()
+                .map(|v| v as u32),
+            hero_platform: None,
+            hero_avatar: None,
+            opponent_name: None,
+            opponent_commander_id: r
+                .try_get::<Option<i64>, _>("opponent_commander_id")
+                .ok()
+                .flatten()
+                .map(|v| v as u32),
+            opponent_commander_name: None,
+            opponent_mulligans: r
+                .try_get::<Option<i64>, _>("opponent_mulligans")
+                .ok()
+                .flatten()
+                .map(|v| v as u32),
+            opponent_life_end: r.try_get("opponent_life_end").ok(),
+            opponent_platform: None,
+            opponent_avatar: None,
+            result_reason: r.try_get("result_reason").ok(),
+            min_player_life: r.try_get("hero_min_life").ok(),
+        };
+
+        let preset: i64 = r.try_get("preset_deck").unwrap_or(0);
+
+        let card_rows =
+            sqlx::query("SELECT grp_id, is_opponent, count FROM match_cards WHERE match_id = ?")
+                .bind(&match_id)
+                .fetch_all(pool)
+                .await
+                .unwrap_or_default();
+
+        let cards: Vec<MatchCardRecord> = card_rows
+            .into_iter()
+            .map(|cr| MatchCardRecord {
+                grp_id: cr.get::<i64, _>("grp_id") as u32,
+                is_opponent: cr.get("is_opponent"),
+                count: cr.get::<i64, _>("count") as u32,
+            })
+            .collect();
+
+        let imp_rows = sqlx::query(
+            r#"
+            SELECT grp_id, seat_id, total_damage, max_hit, max_hit_combat, max_hit_spell,
+                   damage_to_player, damage_to_permanents, damage_combat, damage_spell,
+                   titles, COALESCE(cards_drawn, 0) as cards_drawn
+            FROM match_impactful_cards
+            WHERE match_id = ?
+            "#,
+        )
+        .bind(&match_id)
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
+
+        let impactful: Vec<MatchImpactfulRecord> = imp_rows
+            .into_iter()
+            .map(|ir| {
+                let titles_raw: Option<String> = ir.try_get("titles").ok();
+                let titles: Vec<String> = titles_raw
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str(s).ok())
+                    .unwrap_or_default();
+                MatchImpactfulRecord {
+                    grp_id: ir.get::<i64, _>("grp_id") as u32,
+                    seat_id: ir.get::<i64, _>("seat_id") as u32,
+                    total_damage: ir.get::<i64, _>("total_damage") as i32,
+                    max_hit: ir.get::<i64, _>("max_hit") as i32,
+                    max_hit_combat: ir.get::<i64, _>("max_hit_combat") as i32,
+                    max_hit_spell: ir.get::<i64, _>("max_hit_spell") as i32,
+                    damage_to_player: ir.get::<i64, _>("damage_to_player") as i32,
+                    damage_to_permanents: ir.get::<i64, _>("damage_to_permanents") as i32,
+                    damage_combat: ir.get::<i64, _>("damage_combat") as i32,
+                    damage_spell: ir.get::<i64, _>("damage_spell") as i32,
+                    titles,
+                    cards_drawn: ir.get::<i64, _>("cards_drawn"),
+                    counters_added: 0,
+                }
+            })
+            .collect();
+
+        let Some(mut payload) =
+            build_anonymized_payload(&forced_cfg, &record, &cards, &impactful, preset != 0)
+        else {
+            continue;
+        };
+        enrich_payload_from_db(db, &forced_cfg, &record, &mut payload).await;
+        let payload_json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+
+        let res = sqlx::query(
+            r#"
+            INSERT INTO sync_outbox (match_id, payload_json, status, attempts, created_at)
+            VALUES (?, ?, 'pending', 0, ?)
+            ON CONFLICT(match_id) DO UPDATE SET
+                payload_json = excluded.payload_json,
+                status = 'pending',
+                attempts = 0
+            "#,
+        )
+        .bind(&record.match_id)
+        .bind(&payload_json)
+        .bind(&now)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        if res.rows_affected() > 0 {
+            refreshed += 1;
+        }
+    }
+
+    Ok(refreshed)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -860,5 +1519,21 @@ mod tests {
         // Historical backfill sees the match is already in sync_outbox -> 0 newly added
         let backfilled = enqueue_historical_matches(&db, &cfg).await.unwrap();
         assert_eq!(backfilled, 0);
+
+        // Refreshing historical outbox with Tier 3 verified player identity updates the payload
+        cfg.share_player_identity = true;
+        cfg.verified_arena_handle = Some("VerifiedPilot".to_string());
+        cfg.arena_account_hash = Some("hash_verified_123".to_string());
+        let refreshed = refresh_historical_outbox(&db, &cfg).await.unwrap();
+        assert_eq!(refreshed, 1);
+
+        let raw_payload: String =
+            sqlx::query_scalar("SELECT payload_json FROM sync_outbox WHERE match_id = ?")
+                .bind(&rec.match_id)
+                .fetch_one(db.pool())
+                .await
+                .unwrap();
+        assert!(raw_payload.contains("VerifiedPilot"));
+        assert!(raw_payload.contains("hash_verified_123"));
     }
 }
