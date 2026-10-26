@@ -623,6 +623,10 @@ mod tests {
         let html_bytes = resp.into_body().collect().await.unwrap().to_bytes();
         let html_str = String::from_utf8_lossy(&html_bytes);
         assert!(html_str.contains("Unified Archetype &amp; Flex-Slot Explorer"));
+        assert!(html_str.contains("mana-font"));
+        assert!(html_str.contains("keyrune"));
+        assert!(html_str.contains("scryfallArtCropUrl"));
+        assert!(html_str.contains("formatMtgaDeckClipboard"));
     }
 
     #[tokio::test]
