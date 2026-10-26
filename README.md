@@ -30,7 +30,7 @@
 > [!NOTE]
 > **Fork Attribution (MIT License)**  
 > This repository is an extended fork of [Balthazzahr/Rhystic-Tracker](https://github.com/Balthazzahr/Rhystic-Tracker), originally created by [Balthazzahr](https://github.com/Balthazzahr) under the [MIT License](LICENSE).  
-> **v2.0.0 Fork Maintainer:** Matthias Löhr ([@Matt4C6F656872](https://github.com/Matt4C6F656872)) — adds the Live Deck Tracker, Split-HUD overlay, customizable Bento dashboard, activated Deck Honors, Core engine & Best-of-3 hardening, Opt-In 3-Tier Cloud Sync, and the standalone Rust/Axum Community Meta Server & Web Portal.
+> **v2.0.0 Fork Maintainer:** [@Matt4C6F656872](https://github.com/Matt4C6F656872) — adds the Live Deck Tracker, Split-HUD overlay, customizable Bento dashboard, activated Deck Honors, Core engine & Best-of-3 hardening, Opt-In 3-Tier Cloud Sync, and the standalone Rust/Axum Community Meta Server & Web Portal.
 
 ---
 
@@ -39,7 +39,7 @@
 | Dashboard (Bento Grid) | Match History |
 | :---: | :---: |
 | ![Dashboard](docs/screenshots/Dashboard.png) | ![Match History](docs/screenshots/MatchHistory.png) |
-| **Live Match HUD** | **Live Deck Tracker** |
+| **Live Match HUD (with Split Deck Tracker)** | **Live Deck Tracker** |
 | ![Live Match HUD](docs/screenshots/LiveMatchHud.png) | ![Live Deck Tracker](docs/screenshots/LiveDeckTracker.png) |
 | **Match Inspector (Timeline Replay)** | **3-Panel Card Inspector** |
 | ![Match Details](docs/screenshots/MatchHistory_Details.png) | ![Card Inspector](docs/screenshots/CardLibrary_CardInspector.png) |
@@ -64,10 +64,13 @@
 
 ## Core Features
 
-### 1. Live Match HUD & Deck Tracker Overlays
-- **Always-on-Top Live Match HUD:** Displays Hero and Opponent commanders, dynamic life bars scaled by format (`40` for Commander, `25` for Brawl, `20` for Constructed/Limited), turn-by-turn combat and spell damage attributions, token creations, and zone transfers.
-- **Live Deck Tracker & Split View:** Tracks your active deck as cards move between Library, Hand, Battlefield, Graveyard, Exile, and Command Zone—calculating live hypergeometric draw probabilities (`1+`, land, and per-card odds). Available as a standalone view or embedded inside the Live Match HUD split panel.
-- **Best-of-3 Match Transitions:** Preserves match-wide card and turn accumulators across Games 1, 2, and 3 while resetting per-game battlefield instance maps and life totals between games.
+### 1. Live Match HUD & Live Deck Tracker Overlays
+- **Always-on-Top Live Match HUD:** Displays Hero and Opponent commanders, dynamic life bars scaled by format (`40` for Commander, `25` for Brawl, `20` for Constructed/Limited) with animated damage/heal transition bars, collapsible round-by-round combat and spell damage feeds, token creations, and zone transfers.
+- **Live Deck Tracker (Standalone & Embedded Split-HUD):** Tracks your active library in real time as cards move between Library, Hand, Battlefield, Graveyard, Exile, and Command Zone:
+  - **Top 3-Metric Summary Bar:** Displays **Library Remaining** (`remaining / initial`), **Land Draw %**, and **Non-Land Draw %** with live progress bars.
+  - **Probability-Sorted Card List & Filters:** Quick filter pills (`All`, `Spells`, `Lands`), live search, Scryfall art thumbnails, hover card previews, `Copies` (`remaining / initial`), and color-coded `Next Draw %` badges. Depleted cards (`0 / N`) automatically dim and sink to the bottom.
+  - **Embedded HUD Split View:** Toggle the **Deck Tracker** panel directly inside the **Live Match HUD** to view the live combat feed and remaining library probabilities side by side, or use the dedicated **Live Deck Tracker** sidebar tab.
+- **Best-of-3 Match Transitions:** Preserves match-wide card and turn accumulators across Games 1, 2, and 3 while resetting per-game battlefield instance maps, library counts, and life totals between games.
 
 ### 2. Match Analytics & Achievements
 - **Turn-by-Turn Match Timelines:** Full London mulligan detection, opening hand inspection (`mulligan` and `bottom` badges), and chronological turn replay of land drops, spell casts, ability activations, life swings, and combat hits.
@@ -155,7 +158,6 @@ On Linux—including immutable distributions like **Bazzite** and **Fedora Silve
 
 # Build and install without launching:
 ./scripts/install-linux.sh --no-run
-
 ```
 
 ### 3. Building Manually from Source
@@ -163,32 +165,22 @@ On Linux—including immutable distributions like **Bazzite** and **Fedora Silve
 Requires **Node.js (v18+)** and **Rust (stable)**.
 
 * **Debian / Ubuntu / Linux Mint / Pop!_OS:**
-```bash
-sudo apt update && sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev build-essential curl wget file libssl-dev libjavascriptcoregtk-4.1-dev nodejs npm
-
-```
-
-
+  ```bash
+  sudo apt update && sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev build-essential curl wget file libssl-dev libjavascriptcoregtk-4.1-dev nodejs npm
+  ```
 * **Fedora / RHEL:**
-```bash
-sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel openssl-devel @development-tools nodejs npm
-
-```
-
-
+  ```bash
+  sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel openssl-devel @development-tools nodejs npm
+  ```
 * **Arch Linux / CachyOS / Manjaro:**
-```bash
-sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget openssl appmenu-gtk-module libappindicator-gtk3 librsvg nodejs npm
-
-```
-
-
+  ```bash
+  sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget openssl appmenu-gtk-module libappindicator-gtk3 librsvg nodejs npm
+  ```
 
 ```bash
 npm install
 npm run tauri dev     # Development mode with hot-reload
 npm run tauri build   # Production installer bundles (.deb, .rpm, .dmg, .exe)
-
 ```
 
 ### 4. Running the Optional Community Server (`server/`)
@@ -208,20 +200,15 @@ RHYSTIC_SERVER_ADDR="127.0.0.1:8080" \
 RHYSTIC_SERVER_DB="/var/lib/rhystic/rhystic_meta.db" \
 cargo run --release
 
-```
-
 ---
 
 ## License & Legal
 
-Licensed under the **[MIT License](https://www.google.com/search?q=LICENSE)**.
+Licensed under the **[MIT License](LICENSE)**.
 
 ```text
-Copyright (c) 2026 Balthazzahr ([https://github.com/Balthazzahr](https://github.com/Balthazzahr))
-Copyright (c) 2026 Matt4C6F656872 (Fork modifications and additions)
-
+Copyright (c) 2026 Balthazzahr (https://github.com/Balthazzahr)
+Copyright (c) 2026 Matt4C6F656872 (https://github.com/Matt4C6F656872) (Fork modifications and additions)
 ```
 
 **Fan Content Disclaimer:** Rhystic Tracker is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. Portions of the materials used are property of Wizards of the Coast. © Wizards of the Coast LLC. Card artwork and symbols are fetched via Scryfall's API.
-
-```

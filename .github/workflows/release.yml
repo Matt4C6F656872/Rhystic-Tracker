@@ -56,7 +56,7 @@ jobs:
 
   build-macos:
     name: Build macOS (Universal)
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -152,6 +152,7 @@ jobs:
   publish-release:
     name: Publish GitHub Release
     needs: [build-linux, build-macos, build-windows]
+    if: always() && needs.build-linux.result == 'success' && needs.build-windows.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -166,11 +167,13 @@ jobs:
 
       - name: Download macOS DMG Artifact
         uses: actions/download-artifact@v5
+        continue-on-error: true
         with:
           name: macos-dmg
 
       - name: Download macOS App Artifact
         uses: actions/download-artifact@v5
+        continue-on-error: true
         with:
           name: macos-app
 
@@ -187,18 +190,16 @@ jobs:
 
       - name: Generate Checksums
         run: |
-          sha256sum rhystic-tracker-linux-x86_64.tar.gz rhystic-tracker-macos-universal.dmg rhystic-tracker-macos-universal-app.tar.gz rhystic-tracker-windows-x86_64.zip $([ -f rhystic-tracker-windows-setup.exe ] && echo rhystic-tracker-windows-setup.exe) > SHA256SUMS.txt
+          shopt -s nullglob
+          FILES=(rhystic-tracker-*)
+          sha256sum "${FILES[@]}" > SHA256SUMS.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag_name || github.ref_name }}
           files: |
-            rhystic-tracker-linux-x86_64.tar.gz
-            rhystic-tracker-macos-universal.dmg
-            rhystic-tracker-macos-universal-app.tar.gz
-            rhystic-tracker-windows-x86_64.zip
-            rhystic-tracker-windows-setup.exe
+            rhystic-tracker-*
             SHA256SUMS.txt
           generate_release_notes: true
           make_latest: "true"

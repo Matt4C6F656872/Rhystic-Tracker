@@ -68,7 +68,7 @@ All notable changes to Rhystic Tracker are documented in this file.
 Rhystic Tracker v2.0.0 is an extended fork of [**Balthazzahr/Rhystic-Tracker**](https://github.com/Balthazzahr/Rhystic-Tracker), originally created by [**Balthazzahr**](https://github.com/Balthazzahr) under the [MIT License](LICENSE). Special thanks to **Balthazzahr** for building the foundational 1.x local-first MTG Arena tracker architecture,Belere/Plantin visual identity, and GRE combat parser upon which v2.0.0 is built.
 
 - **Copyright (c) 2026 [Balthazzahr](https://github.com/Balthazzahr)**
-- **Copyright (c) 2026 Matthias Löhr / GitHub Handle: [`@Matt4C6F656872`](https://github.com/Matt4C6F656872)** *(Fork modifications and v2.0.0 additions)*
+- **Copyright (c) 2026 [Matt4C6F656872](https://github.com/Matt4C6F656872)** *(Fork modifications and v2.0.0 additions)*
 
 For historical 1.x release notes, see [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 

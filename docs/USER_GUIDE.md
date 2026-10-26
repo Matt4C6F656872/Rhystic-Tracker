@@ -1,6 +1,6 @@
 # Rhystic Tracker — Official User Manual & Setup Guide
 
-Welcome to the comprehensive user manual and setup guide for **Rhystic Tracker v1.7.8**. This document explains how Rhystic Tracker operates under the hood, how to configure your Linux, macOS, or Windows environment, how to use every feature and analytical tool, and how to troubleshoot common questions.
+Welcome to the comprehensive user manual and setup guide for **Rhystic Tracker v2.0.0**. This document explains how Rhystic Tracker operates under the hood, how to configure your Linux, macOS, or Windows environment, how to use every feature and analytical tool, and how to troubleshoot common questions.
 
 ---
 
@@ -24,16 +24,16 @@ Welcome to the comprehensive user manual and setup guide for **Rhystic Tracker v
 6. [Feature Guide](#6-feature-guide)
    - [Global Card Achievements & Trophy Case](#global-card-achievements--trophy-case)
    - [All-Time Leaderboards & Hall of Fame](#all-time-leaderboards--hall-of-fame)
-   - [Dashboard & Time-Series Win Rate Analytics](#dashboard--time-series-win-rate-analytics)
+   - [Dashboard & Bento Grid Telemetry](#dashboard--bento-grid-telemetry)
    - [Comprehensive MTGA Formats Coverage](#comprehensive-mtga-formats-coverage)
-   - [Mulligan Tracking & Opening Phase Replay](#mulligan-tracking--opening-phase-replay)
    - [Live Match HUD & Real-Time Combat Feed](#live-match-hud--real-time-combat-feed)
+   - [Live Deck Tracker & Embedded Split-HUD Mode](#live-deck-tracker--embedded-split-hud-mode)
    - [Match History & Full Match Inspector](#match-history--full-match-inspector)
    - [Deck Library, 3-Column Inspector & True Decklists](#deck-library-3-column-inspector--true-decklists)
    - [Card Library, Full-Card View & Real-Time Ownership Sync](#card-library-full-card-view--real-time-ownership-sync)
    - [Settings & Configuration Control Panel](#settings--configuration-control-panel)
    - [Theming Engine](#theming-engine)
-7. [Data Storage & Privacy](#7-data-storage--privacy)
+7. [Data Storage, Privacy & Opt-In Cloud Sync](#7-data-storage-privacy--opt-in-cloud-sync)
 8. [Frequently Asked Questions (FAQ)](#8-frequently-asked-questions-faq)
 
 ---
@@ -356,15 +356,42 @@ While in an active match, click **Live Match HUD** in the left navigation sideba
   <img src="screenshots/LiveMatchHud.png" alt="Live Match HUD" width="900" />
 </p>
 
-- **Commander & Color Identity**: Displays both players' commanders (for Brawl variants) and active color identities.
-- **Live Action Feed**: Chronological stream of match events:
+- **Dynamic Format-Scaled Life Bars & Ghost Transitions**:
+  - Automatically scales starting life totals to `40` for Commander, `25` for Brawl / Standard Brawl, and `20` for Constructed & Limited formats (expanding dynamically if either player gains life above their starting total).
+  - Features animated 3.5-second transitional "ghost bars" highlighting recent damage taken (red) or life gained (emerald).
+- **Commander & Color Identity Header**: Displays both players' commanders (including partner/background zones), avatars, Play/Draw indicator, and active color identities.
+- **Embedded Deck Tracker Split-View Toggle**: Click the **Deck Tracker** button in the top-right toolbar of the Live Match HUD (`liveHudDeckSplit`) to dock your live remaining library and draw probabilities directly alongside the combat timeline.
+- **Collapsible Round & Turn Combat Feed**: Chronological stream of match events grouped by Round and Turn (plus a dedicated **Opening Phase & Mulligans** block):
   - 📥 `[DRAW]`: Cards drawn into hand.
   - 🟢 `[PLAY]`: Spells cast and lands played.
-  - 🪙 `[TOKEN]`: Tokens generated on the battlefield (e.g. *Treasure*, *1/1 Goblin*).
+  - 🪙 `[TOKEN]`: Tokens generated on the battlefield (consecutively identical tokens collapse cleanly, e.g. `×3`).
   - 💀 `[DIES]`: Permanents destroyed or placed in graveyard.
   - 🌀 `[EXILE]`: Permanents exiled from the battlefield.
   - 💥 `[X DMG]`: Granular combat and spell damage dealt with source and target attributions.
-  - ❤️ `[LIFE +/-X]`: Dynamic life total changes.
+  - ❤️ `[LIFE +/-X]`: Non-combat life total changes with source card attribution.
+
+---
+
+### Live Deck Tracker & Embedded Split-HUD Mode
+Click **Live Deck Tracker** in the left navigation sidebar (or enable the split-view toggle inside **Live Match HUD**) to track your remaining library and next-draw probabilities in real time across Constructed, Brawl, Commander, Draft, Sealed, and Direct Challenge matches.
+
+<p align="center">
+  <img src="screenshots/LiveDeckTracker.png" alt="Live Deck Tracker" width="900" />
+</p>
+
+- **Top 3-Metric Summary Bar**:
+  1. **Library Remaining (`remaining / initial`)**: Exact number of cards currently in your library out of your starting deck size, paired with a live sky-blue depletion bar.
+  2. **Land Draw %**: Real-time hypergeometric probability of drawing a land on your next draw step (`land_draw_probability`), plus the exact count of lands remaining in your library.
+  3. **Non-Land Draw %**: Real-time probability of drawing a spell/non-land card on your next draw step (`non_land_draw_probability`), plus the count of non-land cards remaining.
+- **Quick Category Filter Pills & Live Search**:
+  - Filter your deck list with 1-click pills for **All**, **Spells (Non-Land)**, and **Lands**, or use the search bar to filter by card name or type line (e.g. `Creature`, `Instant`, `Aura`).
+- **Probability-Sorted Card List**:
+  - Each row displays a Scryfall `art_crop` thumbnail, mana cost / color identity pips, hover card image preview, **Copies** (`remaining / initial`, e.g. `3 / 4`), and a color-coded **Next Draw %** badge (emerald for $\ge 10\%$, sky-blue for $\ge 5\%$).
+  - Cards are dynamically sorted by highest draw probability first. When all copies of a card have left your library (`0 / N`), the row dims with strikethrough styling and automatically sinks to the bottom of the list.
+  - Clicking any card row opens the **3-Panel Card Inspector**.
+- **Comprehensive Zone & Best-of-3 Tracking**:
+  - Updates instantaneously as cards move between Library, Hand, Battlefield, Graveyard, Exile, and Command Zone—accounting for opening hands, London mulligan bottomed cards, tutors, mill, scry/surveil to graveyard, and library shuffles.
+  - In **Best-of-3 (Traditional)** matches, library counts and per-game zone maps automatically reset between Games 1, 2, and 3 while preserving series-wide analytics.
 
 ---
 
@@ -457,17 +484,21 @@ The **Settings and Configuration** view is organized into 5 dedicated categorize
 
 1. **General & Behavior**:
    - *Minimize to System Tray on Close*: Keep match tailing running silently in the background.
-   - *Auto-Switch to Live Match HUD*: Automatically jump to the real-time match tracker when game start signals are detected.
+   - *Auto-Switch on Match Start*: Choose whether starting a match in MTGA automatically switches to **Live Match HUD**, **Live Deck Tracker**, or stays **Off**.
+   - *Live HUD Always on Top*: Pin the window above MTG Arena during active matches.
    - *Confirm Before Deleting Decks*: Safety prompt prevention against accidental deck deletion.
-   - *Default Startup Tab*: Choose which view opens on launch (Dashboard, Live Match HUD, Match History, Deck Library, Card Library, Achievements, Leaderboards).
+   - *Default Startup Tab*: Choose which view opens on launch (Dashboard, Live Match HUD, Live Deck Tracker, Match History, Deck Library, Card Library, Achievements, Leaderboards).
+   - *Remember Dashboard Page*: Persist your last viewed multi-page Bento Dashboard tab across restarts.
    - *Setup Assistant*: Re-launch First-Time Setup Wizard.
 2. **Appearance & Themes**:
    - *5-Color Mana Theme Selector*: Switch between White, Blue, Black, Red, and Green themes with live previews.
+   - *Background Artwork Mode*: Choose between Random deck commander art, per-tab Preset card/custom artwork, or solid obsidian background, plus adjustable glassmorphic opacity (`Subtle`, `Standard`, `High`, `Opaque`).
    - *Default Collection Sort Order*: Choose default card sorting (Release Date, Mana Value, Rarity, Alphabetical, Ownership Count).
    - *Compact Card Preview*: Toggle dense match breakdown cards.
-3. **MTGA Connection**:
+3. **Connections & Cloud Sync**:
    - *MTGA Log Path Configuration*: Live discovery, direct manual path entry, file browsing, and validation of `Player.log`.
-   - *Engine Status*: Real-time tailer activity indicator badge.
+   - *Community Meta & Cloud Sync (Opt-In)*: Configure the Community Server URL, toggle anonymous match & card telemetry (`Tier 1`), full decklists for Core/Flex clustering (`Tier 2`), and Log-Detected Arena Handle leaderboard attribution (`Tier 3`).
+   - *Cross-Device Contributor Token Recovery*: Copy or restore your secret `contributor_id` UUID token so your claimed Arena handle stays linked to you across PCs or OS reinstalls.
 4. **Storage & Database**:
    - *Local Card Image Cache*: Real-time disk storage footprint, cached illustration count, Cache Clear, and Pre-download Collection Art tools.
    - *SQLite Database Diagnostics*: Total recorded matches, database file size, local file path, and 1-click **Backup / Export Database** snapshot action.
@@ -487,13 +518,13 @@ Customize the entire application interface with five curated Magic color-identit
 
 ---
 
-## 7. Data Storage & Privacy
+## 7. Data Storage, Privacy & Opt-In Cloud Sync
 
-All Rhystic Tracker data is stored **100% locally on your machine**:
+By default, all Rhystic Tracker data is stored **100% locally on your machine** with zero outbound telemetry (`Tier 0`):
 - **Database**: `~/.config/rhystic-tracker/rhystic.db` (SQLite)
-- **Settings & Theme**: Stored locally in `localStorage` inside the webview.
+- **Settings & Theme**: Stored locally in `localStorage` and `~/.config/rhystic-tracker/sync_settings.json`.
 - **Image Cache**: Cached offline under `~/.config/rhystic-tracker/cardimg/`.
-- **Zero Telemetry**: Your match records, decklists, and game logs are never uploaded to any remote server or cloud account.
+- **Optional Community Meta Sync**: If you explicitly opt into **Community Meta & Cloud Sync** under **Settings → Connections & Cloud Sync**, anonymized match records are queued in `sync_outbox` and synced to your configured Rhystic Cloud server (`server/`). You control whether only anonymous match stats, full decklists, or your log-detected Arena handle are shared.
 
 ---
 
