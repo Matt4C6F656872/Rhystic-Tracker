@@ -52,7 +52,7 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
   onShowCard,
   onSelectMatch,
 }) => {
-  const [activeCategory] = useState<'card'>('card');
+  const [activeCategory, setActiveCategory] = useState<'card' | 'deck'>('card');
   const [loading, setLoading] = useState(true);
   const [achievementsData, setAchievementsData] = useState<any>(null);
   const [deckAchievementsData, setDeckAchievementsData] = useState<Array<any>>([]);
@@ -151,7 +151,7 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
     const tierRank: Record<string, number> = { gold: 3, silver: 2, bronze: 1 };
 
     for (const entry of deckAchievementsData) {
-      const aid = entry.achievement_id;
+      const aid = normalizeAchievementId(entry.achievement_id);
       if (!grouped.has(aid)) {
         grouped.set(aid, {
           achievement_id: aid,
@@ -380,8 +380,15 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
   };
 
   const accentColor = palette?.accent || '#A855F7';
-  const totalUnlocked = achievementsData?.total_unlocked ?? 0;
-  const totalPossible = achievementsData?.total_possible ?? 21;
+  const totalCardUnlocked = achievementsData?.total_unlocked ?? 0;
+  const totalCardPossible = achievementsData?.total_possible ?? 21;
+  const totalDeckUnlocked = useMemo(() => {
+    const ids = new Set(deckAchievementsData.map((d: any) => d.achievement_id));
+    return ids.size;
+  }, [deckAchievementsData]);
+  const totalDeckPossible = Object.keys(DECK_ACHIEVEMENTS_REGISTRY).length;
+  const totalUnlocked = activeCategory === 'card' ? totalCardUnlocked : totalDeckUnlocked;
+  const totalPossible = activeCategory === 'card' ? totalCardPossible : totalDeckPossible;
 
   const selectedMeta = selectedAchievement ? getAchievementMeta(selectedAchievement.achievement) : null;
 
@@ -395,8 +402,34 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
             ACHIEVEMENTS
           </h1>
           <span className="text-xs text-neutral-400 font-sans ml-2">
-            ({totalUnlocked} of {totalPossible} trophies unlocked)
+            ({totalUnlocked} of {totalPossible} {activeCategory === 'card' ? 'card trophies' : 'deck honors'} unlocked)
           </span>
+        </div>
+
+        {/* Category Switcher: Card Trophies vs Deck Honors */}
+        <div className="inline-flex border border-white/10 bg-black/40 p-0.5">
+          <button
+            type="button"
+            onClick={() => setActiveCategory('card')}
+            className={`px-3 py-1 text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${
+              activeCategory === 'card'
+                ? 'bg-white/15 text-white font-bold'
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            Card Trophies ({totalCardUnlocked}/{totalCardPossible})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveCategory('deck')}
+            className={`px-3 py-1 text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${
+              activeCategory === 'deck'
+                ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            Deck Honors ({totalDeckUnlocked}/{totalDeckPossible})
+          </button>
         </div>
       </div>
 
@@ -742,23 +775,104 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
             />
           )}
         </>
+      ) : loadingDeck ? (
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-1 min-h-0">
+          <div className="py-24 text-center text-xs font-mono uppercase tracking-wider text-neutral-500">
+            Loading deck honors...
+          </div>
+        </div>
+      ) : deckDisplayList.length === 0 ? (
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-1 min-h-0">
+          <div className="py-24 text-center space-y-3">
+            <div className="w-14 h-14 bg-white/[0.02] border border-white/10 flex items-center justify-center text-neutral-500 mx-auto">
+              <span className="ms ms-ability-adventure text-3xl opacity-40" />
+            </div>
+            <p className="text-sm font-sans text-neutral-300 font-medium">
+              No deck honors unlocked yet
+            </p>
+            <p className="text-xs font-sans text-neutral-500 max-w-md mx-auto">
+              Toggle the eye icon in the toolbar above to preview all 6 deck honors and their Bronze, Silver, and Gold requirements.
+            </p>
+          </div>
+        </div>
       ) : (
-        /* Deck Achievements View — Coming Soon */
-        <div className="flex-1 flex flex-col items-center justify-center min-h-0 py-24 text-center select-none space-y-4">
-          <div className="w-16 h-16 bg-white/[0.03] border border-white/10 flex items-center justify-center text-amber-400 mx-auto shadow-xl">
-            <span className="ms ms-ability-adventure text-3xl opacity-80" />
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-1">
+          <div className="flex flex-wrap justify-center gap-4 py-2">
+            {deckDisplayList.map((ach: any) => {
+              const meta = ach.meta || getDeckAchievementMeta(ach.achievement_id || ach.achievement);
+              const isUnearned = !!ach.is_unearned;
+              const uniqueDecks = Array.from(new Set((ach.decks || []).map((d: any) => d.deck_name)));
+
+              return (
+                <div
+                  key={ach.achievement_id || ach.achievement}
+                  onClick={() => setSelectedDeckAchievement(ach)}
+                  className={`group relative flex flex-col justify-between p-4 border transition-all cursor-pointer select-none bg-neutral-900/40 hover:bg-neutral-900/80 hover:border-white/30 hover:shadow-xl ${
+                    isUnearned
+                      ? 'border-white/5 opacity-50 grayscale hover:grayscale-0 hover:opacity-90'
+                      : 'border-white/10'
+                  }`}
+                  style={{ width: `${CARD_W}px`, height: `${CARD_H}px` }}
+                >
+                  <div className="w-full flex items-center justify-between pb-2 border-b border-white/10">
+                    <h4 className="text-[17px] font-bold font-sans uppercase tracking-wide text-white truncate text-left flex-1" title={meta.title}>
+                      {meta.title}
+                    </h4>
+                    {isUnearned ? (
+                      <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 border border-white/10 bg-white/5 text-neutral-400 shrink-0">
+                        Unearned
+                      </span>
+                    ) : (
+                      <span className={`text-[9.5px] font-mono font-bold px-2 py-0.5 border uppercase tracking-wider shrink-0 ${
+                        ach.highest_tier === 'gold' ? 'bg-amber-500/15 text-amber-300 border-amber-500/35'
+                        : ach.highest_tier === 'silver' ? 'bg-slate-400/15 text-slate-200 border-slate-400/35'
+                        : 'bg-amber-900/25 text-amber-200 border-amber-700/35'
+                      }`}>
+                        {ach.highest_tier}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className={`flex-1 w-full min-h-0 flex items-center justify-center my-1 transition-transform duration-300 group-hover:scale-105 ${isUnearned ? 'opacity-35 grayscale' : ''}`}>
+                    <DeckAchievementBadge
+                      title={ach.achievement_id || ach.achievement}
+                      tier={ach.highest_tier}
+                      count={uniqueDecks.length}
+                      size="hero"
+                      showTitle={false}
+                      showCount={false}
+                      showTooltip={false}
+                    />
+                  </div>
+
+                  <div className="space-y-0.5 mb-1">
+                    {isUnearned ? (
+                      <p className="text-[11px] font-mono text-neutral-500">Click to inspect criteria</p>
+                    ) : (
+                      <p className="text-[11px] font-mono text-neutral-400 tabular-nums">
+                        Earned by <span className="text-white font-bold">{uniqueDecks.length}</span> {uniqueDecks.length === 1 ? 'deck' : 'decks'} ({ach.decks?.length || 1}× total)
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="w-full pt-2 border-t border-white/10 flex items-center justify-between gap-2 text-xs font-mono">
+                    {isUnearned ? (
+                      <div className="flex items-center justify-center w-full text-neutral-500 text-[11px] font-mono py-0.5">
+                        <span>Locked · Not yet earned</span>
+                      </div>
+                    ) : (
+                      <div className="min-w-0 flex-1 text-left">
+                        <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-wider block leading-none">Latest Deck</span>
+                        <span className="text-[12.5px] font-bold font-sans uppercase text-white truncate block tracking-wide" title={String(uniqueDecks[0] || '')}>
+                          {String(uniqueDecks[0] || '—')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="space-y-1">
-            <h3 className="text-xl font-display font-bold tracking-wider uppercase text-white">
-              Deck Achievements
-            </h3>
-            <span className="inline-block text-[10px] font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 border border-amber-500/40 bg-amber-500/10 text-amber-300">
-              Coming Soon
-            </span>
-          </div>
-          <p className="text-xs font-sans text-neutral-400 max-w-md mx-auto leading-relaxed">
-            Deck milestone honors, win streaks, and tactical endurance badges are currently in forge and will debut in an upcoming update!
-          </p>
         </div>
       )}
 

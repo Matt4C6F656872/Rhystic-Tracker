@@ -2,13 +2,41 @@ use crate::db::DatabaseManager;
 use sqlx::Row;
 
 #[tauri::command]
-pub async fn get_deck_achievements(_deck_name: String) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!([]))
+pub async fn get_deck_achievements(deck_name: String) -> Result<serde_json::Value, String> {
+    let db = DatabaseManager::init().await.map_err(|e| e.to_string())?;
+    let rows = db.get_deck_achievements(&deck_name).await.map_err(|e| e.to_string())?;
+    let list: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|(achievement_id, tier, achieved_at, match_id)| {
+            serde_json::json!({
+                "deck_name": deck_name,
+                "achievement_id": achievement_id,
+                "tier": tier,
+                "earned_at": achieved_at,
+                "match_id": match_id,
+            })
+        })
+        .collect();
+    Ok(serde_json::json!(list))
 }
 
 #[tauri::command]
 pub async fn get_all_deck_achievements() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!([]))
+    let db = DatabaseManager::init().await.map_err(|e| e.to_string())?;
+    let rows = db.get_all_deck_achievements().await.map_err(|e| e.to_string())?;
+    let list: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|(deck_name, achievement_id, tier, achieved_at, match_id)| {
+            serde_json::json!({
+                "deck_name": deck_name,
+                "achievement_id": achievement_id,
+                "tier": tier,
+                "earned_at": achieved_at,
+                "match_id": match_id,
+            })
+        })
+        .collect();
+    Ok(serde_json::json!(list))
 }
 
 #[tauri::command]

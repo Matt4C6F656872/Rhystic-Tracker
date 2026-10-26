@@ -866,9 +866,9 @@ export const DECK_ACHIEVEMENTS_REGISTRY: Record<string, AchievementMeta> = {
       collectorNumber: '38',
     },
   },
-  blitzkrieg: {
-    id: 'blitzkrieg',
-    title: 'Blitzkrieg',
+  gotta_go_fast: {
+    id: 'gotta_go_fast',
+    title: 'Gotta Go Fast',
     category: 'Speed',
     description: 'Awarded for overwhelming the opponent with blistering speed and early match finishes.',
     tierDescriptions: {
@@ -1042,6 +1042,7 @@ export function normalizeAchievementId(titleOrId: string): string {
   
   if (clean === 'ozolithic') return 'ozolithic';
   if (clean === 'rhystic') return 'rhystic_tracker';
+  if (clean === 'blitzkrieg') return 'gotta_go_fast';
   return clean;
 }
 

@@ -768,7 +768,10 @@ export default function App() {
         if (liveState && liveState.is_active) {
           if (!wasActive) {
             wasActive = true;
-            if (localStorage.getItem('autoSwitchLiveHud') === 'true') {
+            const targetView = localStorage.getItem('autoSwitchLiveView');
+            if (targetView === 'live' || targetView === 'live-deck') {
+              setActiveTab(targetView);
+            } else if (!targetView && localStorage.getItem('autoSwitchLiveHud') === 'true') {
               setActiveTab('live');
             }
           }
@@ -904,6 +907,8 @@ export default function App() {
       'Brawl - Competitive',
       'Brawl - Standard',
       'Standard Brawl',
+      'Commander',
+      'Commander - Competitive',
       'Direct Challenge',
       'Draft',
       'Explorer',

@@ -799,13 +799,15 @@ impl MatchAssembler {
 
     pub fn start_match(&mut self, match_id: String, format_name: String, assigned_deck_event: bool) {
         let now = Utc::now();
-        let is_brawl = format_name.to_lowercase().contains("brawl") || format_name.to_lowercase().contains("commander");
+        let lower_fmt = format_name.to_lowercase();
+        let is_commander = lower_fmt.contains("commander") && !lower_fmt.contains("brawl");
+        let is_brawl = lower_fmt.contains("brawl") || is_commander;
         if !is_brawl {
             self.cached_commander_id = None;
         }
         self.last_assigned_deck_event = assigned_deck_event;
 
-        let default_life = if is_brawl { 25 } else { 20 };
+        let default_life = if is_commander { 40 } else if is_brawl { 25 } else { 20 };
 
         self.current_player_life = default_life;
         self.min_player_life = default_life;

@@ -7,6 +7,8 @@ mod card_db;
 mod deck_list;
 mod settings;
 mod deck_legitimacy;
+mod deck_achievements;
+mod sync;
 mod dashboard;
 mod client_loc;
 mod quest_catalog;
@@ -105,93 +107,45 @@ async fn record_match_deck_audit(
     let _ = db_manager.upsert_match_deck(match_id, deck_name.as_deref(), deck_id.as_deref(), preset, reason).await;
 }
 
-/// Evaluates and awards deck-level achievements upon match completion (Shelved for future milestone)
-#[allow(dead_code)]
+/// Evaluates and awards deck-level achievements upon match completion.
 async fn evaluate_deck_achievements(
     db_manager: &DatabaseManager,
     record: &match_assembler::MatchRecord,
     min_player_life: i32,
+    assigned_deck_event: bool,
 ) {
-    if record.result != "win" {
-        return;
-    }
     let deck_name = &record.player_deck_name;
-    if deck_name.is_empty() || deck_name == "Selected Deck" || deck_name == PRESET_EVENT_DECK_NAME {
+    let is_preset = assigned_deck_event || !crate::deck_achievements::is_eligible(&record.format_name, deck_name, assigned_deck_event);
+    if is_preset {
         return;
     }
-    if crate::deck_legitimacy::preset_deck_reason(deck_name).is_some() {
-        return;
-    }
 
-    let match_id = Some(record.match_id.as_str());
+    let facts = crate::deck_achievements::DeckMatchFacts {
+        format: &record.format_name,
+        is_win: record.result.eq_ignore_ascii_case("win"),
+        turns: record.turns,
+        result_reason: record.result_reason.as_deref(),
+        end_life: record.player_life_end,
+        min_life: Some(min_player_life),
+        starting_life: None,
+        win_streak: 0,
+    };
 
-    // 1. On a Roll: Consecutive match win streak with this deck
-    // Fetch recent match results for this deck before this match
-    let recent_results: Vec<String> = sqlx::query_scalar(
-        "SELECT result FROM matches WHERE hero_deck_name = ? AND id != ? ORDER BY timestamp DESC LIMIT 20"
+    let awarded = crate::deck_achievements::award_for_match(
+        db_manager,
+        &record.match_id,
+        deck_name,
+        facts,
     )
-    .bind(deck_name)
-    .bind(&record.match_id)
-    .fetch_all(db_manager.pool())
-    .await
-    .unwrap_or_default();
+    .await;
 
-    let mut streak = 1usize; // including this win
-    for res in recent_results {
-        if res.eq_ignore_ascii_case("win") {
-            streak += 1;
-        } else {
-            break;
-        }
-    }
-
-    if streak >= 2 {
-        let tier = if streak >= 5 { "gold" } else if streak >= 3 { "silver" } else { "bronze" };
-        let _ = db_manager.record_deck_achievement(deck_name, "on_a_roll", tier, match_id).await;
-    }
-
-    // 2. Comeback Kid: Won match after player life dipped to critical danger
-    if min_player_life <= 8 {
-        let tier = if min_player_life <= 2 { "gold" } else if min_player_life <= 5 { "silver" } else { "bronze" };
-        let _ = db_manager.record_deck_achievement(deck_name, "comeback_kid", tier, match_id).await;
-    }
-
-    // 3. Blitzkrieg: Lightning-fast win in few turns (strictly excluding opponent concedes)
-    let is_concede = record.result_reason.as_deref()
-        .map(|r| r.to_lowercase().contains("concede") || r.to_lowercase().contains("scoop"))
-        .unwrap_or(false);
-
-    if !is_concede && record.turns > 0 && record.turns <= 7 {
-        let tier = if record.turns <= 4 { "gold" } else if record.turns <= 5 { "silver" } else { "bronze" };
-        let _ = db_manager.record_deck_achievement(deck_name, "blitzkrieg", tier, match_id).await;
-    }
-
-    // 4. Iron Fortress: Ending match with huge player life total
-    if let Some(end_life) = record.player_life_end {
-        if end_life >= 30 {
-            let tier = if end_life >= 100 { "gold" } else if end_life >= 50 { "silver" } else { "bronze" };
-            let _ = db_manager.record_deck_achievement(deck_name, "iron_fortress", tier, match_id).await;
-        }
-    }
-
-    // 5. Marathon Master: Won on turn 8+, 12+, 16+
-    if record.turns >= 8 {
-        let tier = if record.turns >= 16 { "gold" } else if record.turns >= 12 { "silver" } else { "bronze" };
-        let _ = db_manager.record_deck_achievement(deck_name, "marathon", tier, match_id).await;
-    }
-
-    // 6. Deck Dominance: Lifetime career match wins with this deck
-    let total_career_wins: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM matches WHERE hero_deck_name = ? AND result = 'win'"
-    )
-    .bind(deck_name)
-    .fetch_one(db_manager.pool())
-    .await
-    .unwrap_or(1);
-
-    if total_career_wins >= 3 {
-        let tier = if total_career_wins >= 10 { "gold" } else if total_career_wins >= 5 { "silver" } else { "bronze" };
-        let _ = db_manager.record_deck_achievement(deck_name, "dominance", tier, match_id).await;
+    if !awarded.is_empty() {
+        println!(
+            "[DECK ACHIEVEMENTS] Deck \"{}\" earned {:?} in match {}",
+            deck_name,
+            awarded,
+            redact_str(&record.match_id)
+        );
     }
 }
 
@@ -438,9 +392,20 @@ async fn dispatch_parsed_event(
                 let _ = db_manager.upsert_match(&record, &card_records, &turn_events, &validated_impactful).await;
                 record_match_deck_audit(db_manager, assembler, &record.match_id, Some(&record.player_deck_name)).await;
                 let _ = db_manager.increment_active_quests_match_count().await;
-                // Deck achievements are shelved for a future release milestone.
-                // let min_life = record.min_player_life.unwrap_or(assembler.min_player_life);
-                // evaluate_deck_achievements(db_manager, &record, min_life).await;
+                let min_life = record.min_player_life.unwrap_or(assembler.min_player_life);
+                evaluate_deck_achievements(db_manager, &record, min_life, assembler.last_assigned_deck_event).await;
+                let sync_cfg = crate::sync::load_sync_config();
+                if sync_cfg.enabled {
+                    let _ = crate::sync::enqueue_match(
+                        db_manager,
+                        &sync_cfg,
+                        &record,
+                        &card_records,
+                        &validated_impactful,
+                        assembler.last_assigned_deck_event,
+                    )
+                    .await;
+                }
             }
         }
         ParsedEvent::InventoryUpdate(record) => {
@@ -715,6 +680,11 @@ fn main() {
                     }
                 };
 
+                let backfilled = crate::deck_achievements::backfill(&db_manager).await;
+                if backfilled > 0 {
+                    println!("[STARTUP] Backfilled {} historical deck achievement(s)", backfilled);
+                }
+
                 run_tailer_supervisor(path_rx, db_manager, assembler_ref).await;
             });
 
@@ -951,7 +921,10 @@ fn main() {
             get_reward_tracks_status,
             get_player_rank_status,
             get_player_rank_history,
-            get_mastery_pass_status
+            get_mastery_pass_status,
+            get_sync_settings_status,
+            update_sync_settings,
+            enqueue_historical_sync
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

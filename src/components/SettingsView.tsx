@@ -48,8 +48,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Desktop & background behavior
   const [minimizeToTray, setMinimizeToTray] = useState(true);
-  const [autoSwitchLiveHud, setAutoSwitchLiveHud] = useState(() => {
-    return localStorage.getItem('autoSwitchLiveHud') === 'true';
+  const [autoSwitchLiveView, setAutoSwitchLiveView] = useState<'off' | 'live' | 'live-deck'>(() => {
+    const raw = localStorage.getItem('autoSwitchLiveView');
+    if (raw === 'live' || raw === 'live-deck' || raw === 'off') return raw;
+    // Backward compatibility with previous boolean autoSwitchLiveHud
+    return localStorage.getItem('autoSwitchLiveHud') === 'true' ? 'live' : 'off';
   });
   const [liveHudAlwaysOnTop, setLiveHudAlwaysOnTop] = useState(() => {
     return localStorage.getItem('liveHudAlwaysOnTop') === 'true';
@@ -300,9 +303,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const handleToggleAutoSwitchLiveHud = (val: boolean) => {
-    setAutoSwitchLiveHud(val);
-    localStorage.setItem('autoSwitchLiveHud', String(val));
+  const handleChangeAutoSwitchLiveView = (val: 'off' | 'live' | 'live-deck') => {
+    setAutoSwitchLiveView(val);
+    localStorage.setItem('autoSwitchLiveView', val);
+    localStorage.setItem('autoSwitchLiveHud', String(val === 'live'));
   };
 
   const handleToggleAlwaysOnTop = async (val: boolean) => {
@@ -686,6 +690,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const startupTabOptions = [
     { value: 'dashboard', label: 'Dashboard (Overview)' },
     { value: 'live', label: 'Live Match HUD' },
+    { value: 'live-deck', label: 'Live Deck Tracker' },
     { value: 'matches', label: 'Match History' },
     { value: 'decks', label: 'Deck Library' },
     { value: 'collection', label: 'Card Library / Collection' },
@@ -927,7 +932,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               matchPersistDashboardPage={matchPersistDashboardPage}
               matchSetupWizard={matchSetupWizard}
               minimizeToTray={minimizeToTray}
-              autoSwitchLiveHud={autoSwitchLiveHud}
+              autoSwitchLiveView={autoSwitchLiveView}
               liveHudAlwaysOnTop={liveHudAlwaysOnTop}
               excludeSparkyMatches={excludeSparkyMatches}
               enableAudioCues={enableAudioCues}
@@ -940,7 +945,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               autoExportFormatOptions={autoExportFormatOptions}
               startupTabOptions={startupTabOptions}
               onToggleMinimizeToTray={handleToggleMinimizeToTray}
-              onToggleAutoSwitchLiveHud={handleToggleAutoSwitchLiveHud}
+              onChangeAutoSwitchLiveView={handleChangeAutoSwitchLiveView}
               onToggleAlwaysOnTop={handleToggleAlwaysOnTop}
               onToggleExcludeSparky={handleToggleExcludeSparky}
               onToggleAudioCues={handleToggleAudioCues}

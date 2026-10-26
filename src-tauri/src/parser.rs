@@ -1444,7 +1444,13 @@ pub fn normalize_format(raw_event_id: &str) -> String {
         "Color Challenge".to_string()
     } else if s.contains("gladiator") {
         "Gladiator".to_string()
-    } else if s.contains("brawl") || s.contains("commander") {
+    } else if s.contains("commander") && !s.contains("brawl") {
+        if s.contains("ranked") || s.contains("competitive") || s.contains("ladder") {
+            "Commander - Competitive".to_string()
+        } else {
+            "Commander".to_string()
+        }
+    } else if s.contains("brawl") {
         if s.contains("ranked") || s.contains("competitive") || s.contains("ladder") {
             "Brawl - Competitive".to_string()
         } else if s.contains("historic") || s.contains("100") {
@@ -1577,6 +1583,9 @@ mod tests {
         assert_eq!(normalize_format("Competitive_Brawl"), "Brawl - Competitive");
         assert_eq!(normalize_format("Brawl_Ranked"), "Brawl - Competitive");
         assert_eq!(normalize_format("Brawl_Ladder"), "Brawl - Competitive");
+        assert_eq!(normalize_format("Commander_Play"), "Commander");
+        assert_eq!(normalize_format("Play_Commander"), "Commander");
+        assert_eq!(normalize_format("Commander_Ranked"), "Commander - Competitive");
 
         // Midweek Magic Tests (regardless of underlying format e.g. Historic Pauper, Brawl, Standard)
         assert_eq!(normalize_format("MWM_HistoricPauper_20260818"), "Midweek Magic");

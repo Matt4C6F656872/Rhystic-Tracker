@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS matches (
     opponent_platform TEXT,
     opponent_avatar TEXT,
     result_reason TEXT,
+    hero_min_life INTEGER,
+    hero_starting_life INTEGER,
     raw_payload TEXT
 );
 CREATE TABLE IF NOT EXISTS match_cards (
@@ -181,6 +183,18 @@ CREATE TABLE IF NOT EXISTS deck_achievements (
     UNIQUE(deck_name, achievement_id, tier)
 );
 CREATE INDEX IF NOT EXISTS idx_deck_achievements_deck ON deck_achievements(deck_name);
+-- Outbox queue for opt-in anonymized match telemetry synchronization
+CREATE TABLE IF NOT EXISTS sync_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_id TEXT NOT NULL UNIQUE,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    synced_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sync_outbox_status ON sync_outbox(status);
 -- Player economy snapshots (Gold, Gems, Vault %, Wildcards, Tokens, Golden Pack)
 CREATE TABLE IF NOT EXISTS player_economy_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -714,6 +728,19 @@ impl DatabaseManager {
             println!("[DB MIGRATION] Added platform and avatar columns to matches table");
         }
 
+        // Migration: add hero_min_life and hero_starting_life columns to matches table
+        let min_life_check: Option<String> = sqlx::query_scalar(
+            "SELECT name FROM pragma_table_info('matches') WHERE name = 'hero_min_life'"
+        )
+        .fetch_optional(&pool)
+        .await?;
+
+        if min_life_check.is_none() {
+            let _ = sqlx::query("ALTER TABLE matches ADD COLUMN hero_min_life INTEGER").execute(&pool).await;
+            let _ = sqlx::query("ALTER TABLE matches ADD COLUMN hero_starting_life INTEGER").execute(&pool).await;
+            println!("[DB MIGRATION] Added hero_min_life and hero_starting_life columns to matches table");
+        }
+
         // Migration: add deck_id column to deck_lists for MTGA UUID synchronization & auto-renaming
         let deck_id_check: Option<String> = sqlx::query_scalar(
             "SELECT name FROM pragma_table_info('deck_lists') WHERE name = 'deck_id'"
@@ -995,6 +1022,19 @@ impl DatabaseManager {
                 UNIQUE(deck_name, achievement_id, tier)
             );
             CREATE INDEX IF NOT EXISTS idx_deck_achievements_deck ON deck_achievements(deck_name);
+            UPDATE deck_achievements SET achievement_id = 'gotta_go_fast' WHERE achievement_id = 'blitzkrieg';
+-- Outbox queue for opt-in anonymized match telemetry synchronization
+CREATE TABLE IF NOT EXISTS sync_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_id TEXT NOT NULL UNIQUE,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    synced_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sync_outbox_status ON sync_outbox(status);
             "#
         ).execute(&pool).await;
 
@@ -1922,8 +1962,8 @@ impl DatabaseManager {
                 id, timestamp, date_str, format, result, duration_seconds, turns, going_first, hero_seat_id,
                 hero_deck_name, hero_commander_id, hero_life_end, hero_mulligans, hero_platform, hero_avatar,
                 opponent_name, opponent_commander_id, opponent_mulligans, opponent_life_end, opponent_platform, opponent_avatar,
-                result_reason, raw_payload
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                result_reason, hero_min_life, raw_payload
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 result = excluded.result,
                 duration_seconds = excluded.duration_seconds,
@@ -1938,7 +1978,8 @@ impl DatabaseManager {
                 opponent_avatar = COALESCE(excluded.opponent_avatar, matches.opponent_avatar),
                 opponent_mulligans = excluded.opponent_mulligans,
                 opponent_life_end = excluded.opponent_life_end,
-                result_reason = excluded.result_reason
+                result_reason = excluded.result_reason,
+                hero_min_life = COALESCE(excluded.hero_min_life, matches.hero_min_life)
             "#
         )
         .bind(&match_rec.match_id)
@@ -1963,6 +2004,7 @@ impl DatabaseManager {
         .bind(&match_rec.opponent_platform)
         .bind(&match_rec.opponent_avatar)
         .bind(&match_rec.result_reason)
+        .bind(match_rec.min_player_life)
         .bind("{}")
         .execute(&mut *tx)
         .await?;
@@ -2790,8 +2832,11 @@ impl DatabaseManager {
         achievement_id: &str,
         tier: &str,
         match_id: Option<&str>,
+        achieved_at_override: Option<&str>,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        let now = chrono::Utc::now().to_rfc3339();
+        let now = achieved_at_override
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
         let res = sqlx::query(
             r#"
             INSERT INTO deck_achievements (deck_name, achievement_id, tier, achieved_at, match_id)

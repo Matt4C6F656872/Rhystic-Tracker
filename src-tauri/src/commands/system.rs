@@ -617,3 +617,65 @@ pub async fn set_always_on_top(window: tauri::Window, enabled: bool) -> Result<(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn get_sync_settings_status() -> Result<serde_json::Value, String> {
+    let db = DatabaseManager::init().await.map_err(|e| e.to_string())?;
+    let cfg = crate::sync::load_sync_config();
+    let stats = crate::sync::get_outbox_stats(&db).await;
+    Ok(serde_json::json!({
+        "enabled": cfg.enabled,
+        "contributor_id": cfg.contributor_id,
+        "server_url": cfg.server_url,
+        "include_deck_cards": cfg.include_deck_cards,
+        "sync_key": cfg.sync_key,
+        "pending_count": stats.pending_count,
+        "synced_count": stats.synced_count,
+        "failed_count": stats.failed_count,
+        "last_synced_at": stats.last_synced_at,
+    }))
+}
+
+#[tauri::command]
+pub async fn update_sync_settings(
+    enabled: bool,
+    server_url: Option<String>,
+    include_deck_cards: Option<bool>,
+    sync_key: Option<String>,
+    rotate_contributor_id: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    let mut cfg = crate::sync::load_sync_config();
+    cfg.enabled = enabled;
+    if let Some(url) = server_url {
+        let trimmed = url.trim().to_string();
+        if !trimmed.is_empty() {
+            cfg.server_url = trimmed;
+        }
+    }
+    if let Some(inc) = include_deck_cards {
+        cfg.include_deck_cards = inc;
+    }
+    if let Some(key) = sync_key {
+        let trimmed = key.trim().to_string();
+        cfg.sync_key = if trimmed.is_empty() { None } else { Some(trimmed) };
+    }
+    if rotate_contributor_id.unwrap_or(false) {
+        cfg.contributor_id = crate::sync::generate_anonymous_uuid();
+    }
+    crate::sync::save_sync_config(&cfg)?;
+    get_sync_settings_status().await
+}
+
+#[tauri::command]
+pub async fn enqueue_historical_sync() -> Result<serde_json::Value, String> {
+    let db = DatabaseManager::init().await.map_err(|e| e.to_string())?;
+    let cfg = crate::sync::load_sync_config();
+    let queued = crate::sync::enqueue_historical_matches(&db, &cfg).await?;
+    let stats = crate::sync::get_outbox_stats(&db).await;
+    Ok(serde_json::json!({
+        "queued": queued,
+        "pending_count": stats.pending_count,
+        "synced_count": stats.synced_count,
+        "failed_count": stats.failed_count,
+    }))
+}
+

@@ -19,6 +19,7 @@ const FORMAT_COLORS: Record<string, string> = {
   Draft: "#6366F1",
   "Midweek Magic": "#818CF8",
   Commander: "#8B5CF6",
+  "Commander - Competitive": "#7C3AED",
   Alchemy: "#F97316",
   "Alchemy Ranked": "#F97316",
   "Bot Match": "#64748B",

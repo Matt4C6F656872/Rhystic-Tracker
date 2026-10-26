@@ -1171,7 +1171,19 @@ pub async fn get_deck_detail(deck_name: String) -> Result<serde_json::Value, Str
         (None, None)
     };
 
-    let deck_achievements: Vec<serde_json::Value> = Vec::new();
+    let deck_ach_rows = db.get_deck_achievements(&deck_name).await.unwrap_or_default();
+    let deck_achievements: Vec<serde_json::Value> = deck_ach_rows
+        .into_iter()
+        .map(|(achievement_id, tier, achieved_at, match_id)| {
+            serde_json::json!({
+                "deck_name": deck_name,
+                "achievement_id": achievement_id,
+                "tier": tier,
+                "earned_at": achieved_at,
+                "match_id": match_id,
+            })
+        })
+        .collect();
 
     Ok(serde_json::json!({
         "deck_name": deck_name,

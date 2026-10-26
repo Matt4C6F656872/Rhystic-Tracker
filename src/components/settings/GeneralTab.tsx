@@ -21,7 +21,7 @@ export interface GeneralTabProps {
 
   // State values
   minimizeToTray: boolean;
-  autoSwitchLiveHud: boolean;
+  autoSwitchLiveView: 'off' | 'live' | 'live-deck';
   liveHudAlwaysOnTop: boolean;
   excludeSparkyMatches: boolean;
   enableAudioCues: boolean;
@@ -38,7 +38,7 @@ export interface GeneralTabProps {
 
   // Action Handlers
   onToggleMinimizeToTray: (val: boolean) => void;
-  onToggleAutoSwitchLiveHud: (val: boolean) => void;
+  onChangeAutoSwitchLiveView: (val: 'off' | 'live' | 'live-deck') => void;
   onToggleAlwaysOnTop: (val: boolean) => void;
   onToggleExcludeSparky: (val: boolean) => void;
   onToggleAudioCues: (val: boolean) => void;
@@ -66,7 +66,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
   matchPersistDashboardPage,
   matchSetupWizard,
   minimizeToTray,
-  autoSwitchLiveHud,
+  autoSwitchLiveView,
   liveHudAlwaysOnTop,
   excludeSparkyMatches,
   enableAudioCues,
@@ -79,7 +79,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
   autoExportFormatOptions,
   startupTabOptions,
   onToggleMinimizeToTray,
-  onToggleAutoSwitchLiveHud,
+  onChangeAutoSwitchLiveView,
   onToggleAlwaysOnTop,
   onToggleExcludeSparky,
   onToggleAudioCues,
@@ -137,34 +137,52 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
               </div>
             )}
 
-            {/* Auto Switch Live HUD */}
+            {/* Auto Switch on Match Start */}
             {(matchAutoSwitch || !isSearching) && (
-              <div className="flex items-center justify-between py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-3 border-b border-white/5">
                 <div className="space-y-0.5 pr-4">
                   <p className="text-xs font-bold text-white uppercase tracking-wide font-sans">
-                    Auto-Switch to Live Match HUD on Game Start
+                    On Match Start: Auto-Switch View
                   </p>
                   <p className="text-xs font-sans text-neutral-400">
-                    Automatically switch to the Live Match HUD tab whenever a new match begins in MTGA.
+                    Automatically navigate to your preferred view whenever a match begins in MTGA.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={autoSwitchLiveHud}
-                  onClick={() => onToggleAutoSwitchLiveHud(!autoSwitchLiveHud)}
-                  style={autoSwitchLiveHud ? { backgroundColor: MTG_COLORS.green.bg, borderColor: MTG_COLORS.green.border } : undefined}
-                  className={`relative inline-flex items-center h-5 w-10 shrink-0 cursor-pointer border transition-colors ${
-                    autoSwitchLiveHud ? '' : 'bg-white/[0.04] border-white/15'
-                  }`}
-                >
-                  <span
-                    style={autoSwitchLiveHud ? { backgroundColor: MTG_COLORS.green.base } : undefined}
-                    className={`inline-block h-3.5 w-3.5 transform transition-transform ${
-                      autoSwitchLiveHud ? 'translate-x-5' : 'translate-x-0.5 bg-neutral-500'
+                <div className="inline-flex rounded border border-white/10 bg-black/40 p-0.5 shrink-0 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => onChangeAutoSwitchLiveView('off')}
+                    className={`px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider rounded transition-colors ${
+                      autoSwitchLiveView === 'off'
+                        ? 'bg-white/20 text-white font-bold'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
-                  />
-                </button>
+                  >
+                    Off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChangeAutoSwitchLiveView('live')}
+                    className={`px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider rounded transition-colors ${
+                      autoSwitchLiveView === 'live'
+                        ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/40'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Live HUD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChangeAutoSwitchLiveView('live-deck')}
+                    className={`px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider rounded transition-colors ${
+                      autoSwitchLiveView === 'live-deck'
+                        ? 'bg-cyan-500/25 text-cyan-300 font-bold border border-cyan-500/40'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Deck Tracker
+                  </button>
+                </div>
               </div>
             )}
 
