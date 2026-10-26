@@ -662,6 +662,15 @@ pub async fn update_sync_settings(
         cfg.contributor_id = crate::sync::generate_anonymous_uuid();
     }
     crate::sync::save_sync_config(&cfg)?;
+    if cfg.enabled {
+        let cfg_clone = cfg.clone();
+        tokio::spawn(async move {
+            if let Some(db) = DatabaseManager::init().await.ok() {
+                let _ = crate::sync::enqueue_historical_matches(&db, &cfg_clone).await;
+                let _ = crate::sync::flush_outbox_batch(&db, &cfg_clone, 500).await;
+            }
+        });
+    }
     get_sync_settings_status().await
 }
 
@@ -670,12 +679,40 @@ pub async fn enqueue_historical_sync() -> Result<serde_json::Value, String> {
     let db = DatabaseManager::init().await.map_err(|e| e.to_string())?;
     let cfg = crate::sync::load_sync_config();
     let queued = crate::sync::enqueue_historical_matches(&db, &cfg).await?;
+    let mut flushed_count = 0usize;
+    let mut last_error = None;
+    if cfg.enabled {
+        if let Ok(report) = crate::sync::flush_outbox_batch(&db, &cfg, 500).await {
+            flushed_count = report.flushed_count;
+            last_error = report.last_error;
+        }
+    }
     let stats = crate::sync::get_outbox_stats(&db).await;
     Ok(serde_json::json!({
         "queued": queued,
+        "flushed_count": flushed_count,
+        "last_error": last_error,
         "pending_count": stats.pending_count,
         "synced_count": stats.synced_count,
         "failed_count": stats.failed_count,
+        "last_synced_at": stats.last_synced_at,
     }))
 }
+
+#[tauri::command]
+pub async fn flush_sync_outbox() -> Result<serde_json::Value, String> {
+    let db = DatabaseManager::init().await.map_err(|e| e.to_string())?;
+    let cfg = crate::sync::load_sync_config();
+    let report = crate::sync::flush_outbox_batch(&db, &cfg, 200).await?;
+    let stats = crate::sync::get_outbox_stats(&db).await;
+    Ok(serde_json::json!({
+        "flushed_count": report.flushed_count,
+        "last_error": report.last_error,
+        "pending_count": stats.pending_count,
+        "synced_count": stats.synced_count,
+        "failed_count": stats.failed_count,
+        "last_synced_at": stats.last_synced_at,
+    }))
+}
+
 

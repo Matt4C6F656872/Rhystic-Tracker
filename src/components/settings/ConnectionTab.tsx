@@ -55,6 +55,7 @@ export const ConnectionTab: React.FC<ConnectionTabProps> = ({
   const [serverUrlInput, setServerUrlInput] = useState('https://api.rhystic.gg');
   const [syncSaved, setSyncSaved] = useState(false);
   const [backfillBusy, setBackfillBusy] = useState(false);
+  const [flushBusy, setFlushBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,15 +108,55 @@ export const ConnectionTab: React.FC<ConnectionTabProps> = ({
                 pending_count: res.pending_count ?? prev.pending_count,
                 synced_count: res.synced_count ?? prev.synced_count,
                 failed_count: res.failed_count ?? prev.failed_count,
+                last_synced_at: res.last_synced_at ?? prev.last_synced_at,
               }
             : prev
         );
-        setBackfillMsg(`Queued ${res.queued ?? 0} match(es) into local outbox`);
+        if (res.last_error) {
+          setBackfillMsg(`Queued ${res.queued ?? 0} • ${res.last_error}`);
+        } else if ((res.flushed_count ?? 0) > 0) {
+          setBackfillMsg(
+            `Queued ${res.queued ?? 0} match(es) • Synced ${res.flushed_count} to server`
+          );
+        } else {
+          setBackfillMsg(`Queued ${res.queued ?? 0} match(es) into local outbox`);
+        }
       }
     } catch (err) {
       console.error('Failed to enqueue historical matches:', err);
     } finally {
       setBackfillBusy(false);
+    }
+  };
+
+  const handleFlushOutbox = async () => {
+    setFlushBusy(true);
+    setBackfillMsg(null);
+    try {
+      const res = await invoke<any>('flush_sync_outbox');
+      if (res) {
+        setSyncStatus((prev) =>
+          prev
+            ? {
+                ...prev,
+                pending_count: res.pending_count ?? prev.pending_count,
+                synced_count: res.synced_count ?? prev.synced_count,
+                failed_count: res.failed_count ?? prev.failed_count,
+                last_synced_at: res.last_synced_at ?? prev.last_synced_at,
+              }
+            : prev
+        );
+        if (res.last_error) {
+          setBackfillMsg(res.last_error);
+        } else {
+          setBackfillMsg(`Synced ${res.flushed_count ?? 0} match(es) to server`);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to flush sync outbox:', err);
+      setBackfillMsg(typeof err === 'string' ? err : 'Failed to flush outbox');
+    } finally {
+      setFlushBusy(false);
     }
   };
 
@@ -380,15 +421,31 @@ export const ConnectionTab: React.FC<ConnectionTabProps> = ({
                 </span>
                 {backfillMsg && <span className="text-cyan-300">{backfillMsg}</span>}
               </div>
-              <button
-                type="button"
-                disabled={backfillBusy}
-                onClick={handleQueueHistorical}
-                className="px-3 py-1 border border-white/15 bg-white/[0.04] hover:bg-white/[0.09] disabled:opacity-40 text-[10px] font-mono font-bold uppercase tracking-wider text-white flex items-center gap-1.5 cursor-pointer"
-              >
-                <UploadCloud className="w-3.5 h-3.5" />
-                {backfillBusy ? 'Queueing…' : 'Queue Match History for Sync'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={backfillBusy}
+                  onClick={handleQueueHistorical}
+                  className="px-3 py-1 border border-white/15 bg-white/[0.04] hover:bg-white/[0.09] disabled:opacity-40 text-[10px] font-mono font-bold uppercase tracking-wider text-white flex items-center gap-1.5 cursor-pointer"
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  {backfillBusy ? 'Queueing…' : 'Queue Match History for Sync'}
+                </button>
+                <button
+                  type="button"
+                  disabled={flushBusy || !syncStatus?.enabled}
+                  onClick={handleFlushOutbox}
+                  title={
+                    syncStatus?.enabled
+                      ? 'Push queued outbox matches to the configured ingestion server'
+                      : 'Enable Community Meta & Cloud Sync above to push matches'
+                  }
+                  className="px-3 py-1 border border-emerald-400/30 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-40 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${flushBusy ? 'animate-spin' : ''}`} />
+                  {flushBusy ? 'Syncing…' : 'Sync Outbox Now'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

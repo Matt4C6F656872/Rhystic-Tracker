@@ -1022,7 +1022,8 @@ impl DatabaseManager {
                 UNIQUE(deck_name, achievement_id, tier)
             );
             CREATE INDEX IF NOT EXISTS idx_deck_achievements_deck ON deck_achievements(deck_name);
-            UPDATE deck_achievements SET achievement_id = 'gotta_go_fast' WHERE achievement_id = 'blitzkrieg';
+            UPDATE OR IGNORE deck_achievements SET achievement_id = 'gotta_go_fast' WHERE achievement_id = 'blitzkrieg';
+            DELETE FROM deck_achievements WHERE achievement_id = 'blitzkrieg';
 -- Outbox queue for opt-in anonymized match telemetry synchronization
 CREATE TABLE IF NOT EXISTS sync_outbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

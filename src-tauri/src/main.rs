@@ -396,7 +396,7 @@ async fn dispatch_parsed_event(
                 evaluate_deck_achievements(db_manager, &record, min_life, assembler.last_assigned_deck_event).await;
                 let sync_cfg = crate::sync::load_sync_config();
                 if sync_cfg.enabled {
-                    let _ = crate::sync::enqueue_match(
+                    if let Ok(true) = crate::sync::enqueue_match(
                         db_manager,
                         &sync_cfg,
                         &record,
@@ -404,7 +404,14 @@ async fn dispatch_parsed_event(
                         &validated_impactful,
                         assembler.last_assigned_deck_event,
                     )
-                    .await;
+                    .await
+                    {
+                        let db_flush = db_manager.clone();
+                        let cfg_flush = sync_cfg.clone();
+                        tokio::spawn(async move {
+                            let _ = crate::sync::flush_outbox_batch(&db_flush, &cfg_flush, 50).await;
+                        });
+                    }
                 }
             }
         }
@@ -924,7 +931,8 @@ fn main() {
             get_mastery_pass_status,
             get_sync_settings_status,
             update_sync_settings,
-            enqueue_historical_sync
+            enqueue_historical_sync,
+            flush_sync_outbox
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

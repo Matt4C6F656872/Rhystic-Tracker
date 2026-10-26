@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
     "build": "vite build",
-    "build:app": "npm run build && npx @tauri-apps/cli build --no-bundle",
+    "build:app": "npx @tauri-apps/cli build --no-bundle",
     "preview": "vite preview",
     "tauri": "bash -c 'source $HOME/.cargo/env && tauri \"$@\"' --"
   },

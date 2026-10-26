@@ -18,6 +18,7 @@ use std::collections::HashMap;
 pub const ON_A_ROLL: &str = "on_a_roll";
 pub const COMEBACK_KID: &str = "comeback_kid";
 pub const GOTTA_GO_FAST: &str = "gotta_go_fast";
+#[allow(dead_code)]
 pub const BLITZKRIEG: &str = GOTTA_GO_FAST;
 pub const IRON_FORTRESS: &str = "iron_fortress";
 pub const MARATHON: &str = "marathon";

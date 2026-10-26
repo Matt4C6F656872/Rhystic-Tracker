@@ -5,7 +5,7 @@ import { AchievementBadge } from './AchievementBadge';
 import { AchievementDetailModal } from './AchievementDetailModal';
 import { DeckAchievementBadge } from './DeckAchievementBadge';
 import { DeckAchievementDetailModal } from './DeckAchievementDetailModal';
-import { getAchievementMeta, ACHIEVEMENTS_REGISTRY, getDeckAchievementMeta, DECK_ACHIEVEMENTS_REGISTRY, AchievementTier } from '../utils/achievementBadges';
+import { getAchievementMeta, ACHIEVEMENTS_REGISTRY, getDeckAchievementMeta, DECK_ACHIEVEMENTS_REGISTRY, normalizeAchievementId, AchievementTier } from '../utils/achievementBadges';
 import CardImage from './CardImage';
 import { PaginationFooter, GlassSearchInput, TableShell } from './common';
 import { useColumnManager } from '../hooks/useColumnManager';
