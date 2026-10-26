@@ -618,7 +618,7 @@ pub const PORTAL_HTML: &str = r##"<!DOCTYPE html>
         document.getElementById('kpi-limited-matches').textContent = healthRes.limited_matches ?? 0;
         document.getElementById('kpi-commander-matches').textContent = healthRes.commander_matches ?? 0;
         document.getElementById('kpi-contributors').textContent = healthRes.unique_contributors ?? 0;
-        document.getElementById('server-status-text').textContent = `Online • v${healthRes.version || '0.1.0'}`;
+        document.getElementById('server-status-text').textContent = `Online • v${healthRes.version || '2.0.0'}`;
 
         state.formats = formatsRes || [];
         state.archetypes = archRes || [];

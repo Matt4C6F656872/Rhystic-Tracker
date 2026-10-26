@@ -2,6 +2,13 @@
 
 All notable changes to Rhystic Tracker are documented here.
 
+## [2.0.0] - 2026-10-26 — 🌐 Rhystic Cloud Meta Platform, Live Deck Overlays, Bento Dashboard & Core Engine Overhaul
+
+See the root [`CHANGELOG.md`](../CHANGELOG.md) for full v2.0.0 release notes covering:
+- **Major New Features**: Self-hostable Rust/Axum Community Meta Server & Glassmorphic Web Portal (`server/`), Opt-In 3-Tier Cloud Sync & First-Seen Handle Pinning (`claimed_handles`) with cross-device contributor token recovery, Always-on-Top Live Match HUD & Live Deck Tracker Overlays, 21 Custom SVG Card Trophies (`ImpactfulCardTracker`) & Activated Deck Honors, Customizable Multi-Page Bento Dashboard Widgets, and Economy/Mastery/Quest/Collection Analytics.
+- **Core Engine, Reliability & Security Fixes**: Single-flight SQLite initialization (`DB_SINGLETON`), removal of destructive startup queries, Best-of-3 multi-game state isolation and turn accumulation, string-aware JSON log accumulator with log rotation reset and 2 MB safety cap, out-of-order `MatchCompleted` ID verification, N+1 SQLite query elimination, and scoped cloud sync lookups.
+- **Attribution**: Crediting original author [**Balthazzahr**](https://github.com/Balthazzahr) under the [MIT License](../LICENSE) and fork maintainer **Matthias Löhr** ([`@Matt4C6F656872`](https://github.com/Matt4C6F656872)).
+
 ## [1.7.8] - 2026-10-08 — 📦 Graphical Booster Pack Fanning, Economy Widget Alignment & Dashboard Persistence
 
 ### 📦 Graphical Booster Packs & Inventory Alignment

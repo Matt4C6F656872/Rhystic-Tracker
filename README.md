@@ -3,54 +3,74 @@
 </p>
 
 <p align="center">
-  <strong>The open-source, local-first companion and combat analytics engine for Magic: The Gathering Arena on Linux, macOS & Windows.</strong>
+  <strong>The open-source, local-first MTG Arena companion, live deck tracker, collection & economy analyzer, and self-hostable community meta platform for Linux, macOS & Windows.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Balthazzahr/Rhystic-Tracker/releases"><img src="https://img.shields.io/badge/version-1.7.8-38BDF8?style=flat-square&logo=git" alt="Version 1.7.8" /></a>
+  <img src="https://img.shields.io/badge/version-2.0.0-38BDF8?style=flat-square&logo=git" alt="Version 2.0.0" />
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20Steam%20Deck-1793D1?style=flat-square&logo=linux" alt="Cross-Platform" />
-  <img src="https://img.shields.io/badge/built%20with-Tauri%20v2%20%7C%20Rust%20%7C%20React-24C8D8?style=flat-square&logo=tauri" alt="Tauri" />
+  <img src="https://img.shields.io/badge/built%20with-Tauri%20v2%20%7C%20Rust%20%7C%20React%20%7C%20Axum-24C8D8?style=flat-square&logo=tauri" alt="Tauri & Rust" />
   <img src="https://img.shields.io/badge/database-SQLite-003B57?style=flat-square&logo=sqlite" alt="SQLite" />
-  <img src="https://img.shields.io/badge/license-MIT-emerald?style=flat-square" alt="License MIT" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-emerald?style=flat-square" alt="License MIT" /></a>
 </p>
 
 <p align="center">
   <a href="docs/USER_GUIDE.md"><strong>📖 User Guide & Manual</strong></a> &nbsp;•&nbsp;
-  <a href="docs/CHANGELOG.md"><strong>📝 Release Changelog</strong></a> &nbsp;•&nbsp;
-  <a href="https://github.com/Balthazzahr/Rhystic-Tracker/releases"><strong>📦 GitHub Releases</strong></a>
+  <a href="docs/PLATFORM_ROADMAP.md"><strong>🗺️ Platform & Cloud Roadmap</strong></a> &nbsp;•&nbsp;
+  <a href="CHANGELOG.md"><strong>📝 Release Changelog</strong></a>
 </p>
 
 ---
 
-## ⚡ What is Rhystic Tracker?
+## ⚡ Project Overview & Fork Attribution
 
-**Rhystic Tracker** is a native, ultra-responsive desktop companion for MTG Arena on Linux, macOS, and Windows. It continuously parses MTGA's `Player.log` in real time, persisting every match, mulligan, card draw, spell resolution, token creation, permanent destruction, and combat damage swing into a local SQLite database on your machine.
+**Rhystic Tracker (v2.0.0)** is a native, local-first desktop companion and combat analytics engine for *Magic: The Gathering Arena*, coupled with an optional self-hostable community meta server and web portal. Built with **Tauri v2 (Rust)**, **React (TypeScript)**, and **SQLite**, it tails MTGA's `Player.log` in real time to record every match, London mulligan, card draw, spell resolution, zone transfer, combat swing, economy transaction, and collection update on your local machine—with zero mandatory cloud accounts or telemetry.
 
-Built with **Tauri v2**, **Rust**, **React 18**, and **TypeScript**, it delivers maximum visual performance and instant zero-latency queries without cloud requirements, tracking accounts, or telemetry.
+> [!IMPORTANT]
+> ### Fork Attribution & Upstream Credit (MIT License)
+> This repository is an extended fork of [**Rhystic Tracker**](https://github.com/Balthazzahr/Rhystic-Tracker), originally created by [**Balthazzahr**](https://github.com/Balthazzahr) and distributed under the [MIT License](LICENSE).
+>
+> - **Original Author & Upstream Repository:** Copyright (c) 2026 [Balthazzahr](https://github.com/Balthazzahr) — [`github.com/Balthazzahr/Rhystic-Tracker`](https://github.com/Balthazzahr/Rhystic-Tracker)
+> - **Fork Maintainer & Additions:** Copyright (c) 2026 **Matthias Löhr** (GitHub: [`@Matt4C6F656872`](https://github.com/Matt4C6F656872))
+>
+> #### What This Fork Adds & Expands (v2.0.0):
+> 1. **Live Deck Tracker & Split-HUD Overlay:** Real-time draw probabilities, remaining library counts, graveyard/exile/command zone tracking, embedded HUD + Deck split view, and Best-of-3 multi-game state handling.
+> 2. **Community Meta Server & Web Portal (`server/`):** A standalone Rust + Axum analytical server and glassmorphic web portal featuring a 4-layer archetype clustering engine, **Core vs. Flex-Slot Matrix**, **Scryfall Art Headers & Card Hover Previews**, **1-Click MTGA Deck Export**, and **First-Seen Handle Pinning (`claimed_handles`)** with cross-device contributor token recovery.
+> 3. **Opt-In 3-Tier Cloud Sync (`src-tauri/src/sync.rs`):** Local SQLite outbox queue (`sync_outbox`) with granular privacy controls under **Settings → Connections & Cloud Sync**.
+> 4. **Customizable Bento Dashboard, Economy & Collection Analytics:** Draggable/toggleable dashboard widgets, Gold/Gems/Wildcard/Vault history, Quest & Mastery tracking, and set completion breakdowns.
+> 5. **Activated Deck Honors & Format-Scaled Achievements:** Full activation of Deck Achievements (`On a Roll`, `Comeback Kid`, `Gotta Go Fast`, `Iron Fortress`, `Marathon Master`, `Deck Dominance`) scaled dynamically for 20-life Constructed, 25-life Brawl, and 40-life Commander games.
+> 6. **Core Engine Hardening & Immutable Linux Support:** String-aware JSON log framing, log rotation recovery, Bo3 state isolation, N+1 SQL query elimination, and automated Distrobox builds for Bazzite / Fedora Silverblue (`./scripts/install-linux.sh`).
 
 > **Fan Content Disclaimer:** Rhystic Tracker is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. Portions of the materials used are property of Wizards of the Coast. © Wizards of the Coast LLC. Card artwork and symbols are fetched via Scryfall's API.
 
 ---
 
-## ✨ Features at a Glance
+## ✨ Current Feature Breakdown
 
-- 🎨 **Authentic MTG Visual Aesthetic**: Complete sharp geometry (`rounded-none`), official **Beleren Bold** & **Plantin MTG** typography, and authentic MTG mana and ability font iconography.
-- 🔍 **Advanced Match Filtering & Dedicated Commander Columns**: Filter matches by multiple commanders (OR) and multiple cards in deck (AND) with fuzzy type-ahead autocomplete, plus dedicated table columns for hero and opponent commanders with square art crops.
-- ⚙️ **Categorized Tabbed Settings**: Organized into 5 dedicated tabs (*General & Behavior*, *Appearance & Themes*, *MTGA Connection*, *Storage & Database*, *About & Legal*) with safety confirmations and card density controls.
-- 🔍 **Expanded Floating Inspector Workspaces**: Massive `95vw × 97vh` modal workspaces for Decks, Matches, and Cards with borderless floating analytics, authentic mana pie charts, and turn-by-turn combat replay.
-- 🔄 **Automatic True Decklist Capture & UUID Sync**: Automatic ingestion of 100% full genuine decklists (including Commanders) upon starting a match or navigating decks, paired with MTGA persistent UUID tracking that automatically propagates deck modifications and renames while preserving historical match analytics.
-- 🏆 **Global Card Achievements & Trophy Case**: 21 custom SVG achievement emblems spanning 7 categories with Bronze, Silver, and Gold tiers, objective value thresholds ($X+$), MVP showcase, center-out symmetrical square clustering, and interactive drill-down roster modal with MTG lore quotes.
-- 🏛️ **All-Time Leaderboards & Hall of Fame**: 3×3 domain grid across Combat Damage, Non-Combat Damage, and Honors & Mastery with 9 categories (including Card Draw Engines and Battlefield Stalwarts), podium styling with crowns, full-height 25-card drill-down modal, live search, and diff-to-podium tracking.
-- 🍏 **Cross-Platform Linux, macOS & Windows Support**: Universal release packaging with native log and raw card database discovery across Linux (Proton, Lutris, Bottles, Heroic), macOS, and Windows.
-- 🃏 **Mulligan Tracking & Timeline Replay**: Full London mulligan detection, opening hand buffer state machine, and dedicated Opening Phase section in the Match Play Timeline with amber `mulligan` and orange `bottom` badges.
-- 🧙‍♂️ **First-Time Setup Wizard & Dynamic Discovery**: Guided 3-step setup with real-time log detection across all prefixes, plus instant startup card indexing (26,000+ cards in ~150ms).
-- 🏅 **Comprehensive MTGA Formats Coverage**: Native categorization and distinct colored badges for all 13 formats (Standard, Standard Brawl, Brawl, Alchemy, Historic, Timeless, Explorer, Draft, Sealed, Bot Match with precon resolution, Direct Challenge, Midweek Magic, and Gladiator).
-- 📊 **Dashboard & Time-Series Win Rate Analytics**: Today's and all-time records, active streak counter, daily match grouping, overhauled 3x2 format breakdown, and time-series graph with 5 time windows (`Today`, `7 Days`, `30 Days`, `12 Months`, `All Time`), dual-colored 50% threshold trend line (green/red), and volume histograms.
-- ⚔️ **Live Match HUD**: Real-time game state tracker showing hero/opponent commanders, life swings, card plays, token creations, death/exile logs, and detailed combat/spell damage attributions with authentic MTG font icons.
-- 📈 **Lifetime Card Combat Analytics**: Persistent per-card metrics — win rate when cast, total damage dealt (face vs permanent splits), combat vs spell classification, MVP decks, and turn cast frequency histograms.
-- 🎴 **Deck Library & 3-Column Inspector**: Automatic and manual True-decklist management, starter deck exclusions, responsive 3-column decklist expansion for widescreen displays, enlarged mana distribution pie chart, and centered `MANA VALUE` histogram pill overlay.
-- 🖼️ **Card Library & Real-Time Collection Sync**: Visual collection explorer synced with submitted decks, calibrated 4×3 full-card grid, 4-diamond interactive ownership controls, and persistent alternate set printing selection.
-- 🎨 **Five Color-Identity Mana Themes**: Dynamic White, Blue, Black, Red, and Green themes that meticulously tint the entire application.
+### 1. Live Overlays (`Live Match HUD` & `Live Deck Tracker`)
+- **Always-on-Top Live Match HUD:** Real-time game state tracker displaying Hero and Opponent commanders, dynamic life bars scaled automatically by format (`40` for Commander, `25` for Brawl, `20` for standard Constructed/Limited), turn-by-turn combat & spell damage attributions, token creations, and zone transfers.
+- **Live Deck Tracker & Embedded Split View:** Tracks your active deck in real time as cards move between Library, Hand, Battlefield, Graveyard, Exile, and Command Zone—calculating live draw percentages ($1+$, land, and per-card probabilities). Can be used as a dedicated tab or toggled directly inside the Live Match HUD split panel.
+- **Best-of-3 (Traditional) Match Transitions:** Preserves match-wide card/turn accumulators across Games 1, 2, and 3 while cleanly resetting per-game battlefield instance maps and life totals between games.
+- **Configurable Match-Start Auto-Switch:** Automatically switch to `Live Match HUD`, `Live Deck Tracker`, or stay on your current workspace when a match begins.
+
+### 2. Deep Match Analytics & Achievements
+- **Turn-by-Turn Match Timelines:** Full London mulligan detection, opening hand inspection (`mulligan` and `bottom` badges), and chronological turn replay of every land drop, spell cast, ability activation, life swing, and combat hit.
+- **First-Class Commander & Brawl Tracking:** Automatic detection and pairing of Hero and Opponent Commanders (including partner/background zones), Commander tax tracking, and multi-commander/multi-card match history filtering.
+- **Per-Card Performance Awards (`ImpactfulCardTracker`) & Deck Honors:**
+  - **21 Custom SVG Card Trophies** across 7 combat categories (Iron, Bronze, Silver, Gold, Titanium/Platinum, and Legendary tiers) such as *Executioner*, *Overkiller*, *Board Wiper*, *Card Draw Engine*, *Negator*, and *Scoop Inducer*.
+  - **Deck Honors:** Automated evaluation and historical backfill of deck-level achievements (*On a Roll*, *Comeback Kid*, *Gotta Go Fast*, *Iron Fortress*, *Marathon Master*, and *Deck Dominance*).
+  - **All-Time Leaderboards & Hall of Fame:** 3×3 domain grid with podium crowns and 25-card drill-down modals.
+
+### 3. Dashboard, Economy & Collection
+- **Customizable Bento Dashboard:** Modular widget grid featuring Win-Rate Time Series (`Today`, `7 Days`, `30 Days`, `12 Months`, `All Time`), Format Distribution, Commander Spotlight, Mana Curve & Speed Clocks, Play vs. Draw Splits, Mulligan Analytics, Nemesis & Victim Tracker, and Lucky/Cursed Cards.
+- **Economy, Quests & Mastery Tracking:** Tracks Gold, Gems, Vault Progress, Wildcard inventory (Common, Uncommon, Rare, Mythic), daily quest completion history, and set Mastery Pass progression.
+- **Collection Analyzer & Set Completion:** Visual 4×3 card library and table explorer synced with MTGA's local `Raw_CardDatabase_*.mtga` (26,000+ cards indexed in ~150ms), featuring set completion progress bars, 4-diamond ownership controls, and persistent per-card custom set/art preferences.
+
+### 4. Community Meta & Self-Hostable Web Portal (`server/`)
+- **Opt-In 3-Tier Privacy Cloud Sync:** Configured in **Settings → Connections & Cloud Sync**. Strictly offline by default (`Tier 0`), with granular checkboxes for anonymous match outcomes & card telemetry (`Tier 1`), full decklists for archetype clustering (`Tier 2`), and public leaderboard handle attribution (`Tier 3`).
+- **First-Seen Handle Claiming (`claimed_handles`) & Token Recovery:** When an Arena handle is synced for the first time, the server binds the normalized handle and `player_account_hash` to the SHA-256 digest of the user's secret local `contributor_id` token—preventing stream-snipers or `Player.log` editors from spoofing another player's handle. Users can copy and restore their secret contributor token across devices directly in the UI.
+- **Unified Archetype & Core vs. Flex-Slot Matrix:** 4-layer aggregation pipeline (Exact `deck_hash`, Commander grouping, TF-IDF Weighted Jaccard 60-card archetype clustering, and 17Lands-style Limited color-pair analytics) with side-by-side **Core ($\ge 70\%$)** vs. **Flex ($< 70\%$)** inclusion win-rate delta tables and an in-place **Variant Switcher**.
+- **Scryfall Art Headers, Hover Previews & 1-Click MTGA Export:** Zero-blocking Scryfall `art_crop` blurred banners for Commanders and Archetypes, interactive floating `normal` card image previews on hover, visual win-rate bars, real `mana-font` WUBRG pips, and 1-click MTGA clipboard deck export.
 
 ---
 
@@ -60,9 +80,13 @@ Built with **Tauri v2**, **Rust**, **React 18**, and **TypeScript**, it delivers
 | :-------------------------------------------------------: | :----------------------------------------------: |
 |        ![Dashboard](docs/screenshots/Dashboard.png)        |   ![Match History](docs/screenshots/MatchHistory.png)    |
 
-|             Match Inspector (Timeline Replay)             |                  Live Match HUD                  |
+|                    Live Match HUD                         |                Live Deck Tracker                 |
 | :-------------------------------------------------------: | :----------------------------------------------: |
-| ![Match Details](docs/screenshots/MatchHistory_Details.png) |   ![Live Match HUD](docs/screenshots/LiveMatchHud.png)   |
+|   ![Live Match HUD](docs/screenshots/LiveMatchHud.png)    | ![Live Deck Tracker](docs/screenshots/LiveDeckTracker.png) |
+
+|             Match Inspector (Timeline Replay)             |                  3-Panel Card Inspector          |
+| :-------------------------------------------------------: | :----------------------------------------------: |
+| ![Match Details](docs/screenshots/MatchHistory_Details.png) | ![Card Inspector](docs/screenshots/CardLibrary_CardInspector.png) |
 
 |                 Deck Library (Card View)                  |            Deck Library (Table View)             |
 | :-------------------------------------------------------: | :----------------------------------------------: |
@@ -72,158 +96,159 @@ Built with **Tauri v2**, **Rust**, **React 18**, and **TypeScript**, it delivers
 | :-------------------------------------------------------: | :----------------------------------------------: |
 |   ![Card Library](docs/screenshots/CardLibrary_CardView.png)    | ![Card Library Table](docs/screenshots/CardLibrary_TableView.png) |
 
-|                  3-Panel Card Inspector                   |            Global Achievements & Trophies        |
+|            Global Achievements & Trophies                 |                 Achievement Details Roster       |
 | :-------------------------------------------------------: | :----------------------------------------------: |
-| ![Card Inspector](docs/screenshots/CardLibrary_CardInspector.png) |     ![Achievements](docs/screenshots/Achievements.png)     |
+|     ![Achievements](docs/screenshots/Achievements.png)     | ![Achievement Details](docs/screenshots/Achievements_Details.png) |
 
-|                 Achievement Details Roster                |            All-Time Leaderboards & Podium        |
+|            All-Time Leaderboards & Podium                 |                 Leaderboard 25-Card Drilldown    |
 | :-------------------------------------------------------: | :----------------------------------------------: |
-| ![Achievement Details](docs/screenshots/Achievements_Details.png) |     ![Leaderboards](docs/screenshots/Leaderboards.png)     |
-
-|                 Leaderboard 25-Card Drilldown             |
-| :-------------------------------------------------------: |
-| ![Leaderboard Details](docs/screenshots/Leaderboards_Details.png) |
+|     ![Leaderboards](docs/screenshots/Leaderboards.png)     | ![Leaderboard Details](docs/screenshots/Leaderboards_Details.png) |
 
 ---
 
-## 🚀 Quick Start & Installation
+## 🏗️ Architecture Summary
 
-### Option 1: One-Line Installer (Recommended)
+```mermaid
+flowchart LR
+    subgraph MTGA["MTG Arena Client"]
+        LOG["Player.log"]
+        RAW["Raw_CardDatabase_*.mtga"]
+    end
 
-Run the automated installer in your terminal. It automatically fetches the latest release, installs the binary, registers the application icon, and sets up your desktop launcher:
+    subgraph Desktop["Rhystic Tracker Desktop (Tauri v2)"]
+        TAILER["FileTailer & String-Aware JSON Framing\n(src-tauri/src/tailer.rs, main.rs)"]
+        PARSER["Event Parser & MatchAssembler\n(parser.rs, match_assembler.rs)"]
+        SQLITE[("Local SQLite DB\nrhystic.db + sync_outbox\n(src-tauri/src/db.rs)")]
+        SYNC["Opt-In Cloud Sync Worker\n(src-tauri/src/sync.rs)"]
+        UI["React + TypeScript Frontend\nLive HUD, Deck Tracker, Bento Dashboard\n(src/)"]
+    end
 
-```bash
-curl -sSL https://raw.githubusercontent.com/Balthazzahr/Rhystic-Tracker/main/install.sh | bash
+    subgraph Cloud["Optional Community Meta Server (server/)"]
+        AXUM["Axum REST API & Ingestion\n(server/src/lib.rs)"]
+        META_DB[("Server SQLite DB\nrhystic_meta.db + claimed_handles\n(server/src/db.rs)")]
+        PORTAL["Glassmorphic Web Portal\nCore/Flex Matrix & Leaderboards\n(server/src/portal.rs)"]
+    end
+
+    LOG -->|"16MB lookback + live tail"| TAILER
+    RAW -->|"Startup card index"| SQLITE
+    TAILER --> PARSER
+    PARSER -->|"Real-time IPC events"| UI
+    PARSER -->|"Matches, Decks, Economy, Trophies"| SQLITE
+    SQLITE <-->|"Tauri IPC Commands"| UI
+    SQLITE -->|"Batched outbox"| SYNC
+    SYNC -.->|"HTTPS POST /api/v1/sync/matches\n(Opt-in Only)"| AXUM
+    AXUM --> META_DB
+    META_DB --> PORTAL
 ```
 
-_(Alternatively using `wget`: `wget -qO- https://raw.githubusercontent.com/Balthazzahr/Rhystic-Tracker/main/install.sh | bash`)_
-
-The installer copies the binary to `~/.local/bin/rhystic-tracker`, registers high-resolution application icons into `~/.local/share/icons/`, and creates the desktop entry so Rhystic Tracker appears immediately in your application launcher (**GNOME**, **Pop Launcher**, **Cosmic**, **Rofi**, **Wofi**, **KDE Plasma**).
-
-> **Note:** `install.sh` automatically sets `GDK_BACKEND=x11` in the desktop launcher so the app works correctly on both X11 and Wayland sessions (via XWayland).
-
-### Option 2: Arch Linux (AUR)
-
-For **Arch Linux**, **Omarchy**, **CachyOS**, **Manjaro**, and **EndeavourOS** users:
-
-```bash
-# Install pre-compiled binary package
-yay -S rhystic-tracker-bin
-# or build latest from git master
-yay -S rhystic-tracker-git
-```
-
-*(Or build manually using `makepkg -si` inside `packaging/aur/rhystic-tracker-bin/`)*
-
-### Option 3: Manual Download from GitHub Releases
-
-- **Linux (`x86_64`)**:
-  1. Download `rhystic-tracker-linux-x86_64.tar.gz` from [GitHub Releases](https://github.com/Balthazzahr/Rhystic-Tracker/releases/latest).
-  2. Extract and run `./install.sh`:
-     ```bash
-     tar -xzf rhystic-tracker-linux-x86_64.tar.gz
-     ./install.sh
-     ```
-
-- **macOS (Universal - Apple Silicon & Intel)**:
-  1. Download `rhystic-tracker-macos-universal.dmg` from [GitHub Releases](https://github.com/Balthazzahr/Rhystic-Tracker/releases/latest).
-  2. Open the `.dmg` and drag **Rhystic Tracker** to your **Applications** folder.
-  3. *First launch Gatekeeper bypass*: Right-click (or Control-click) **Rhystic Tracker** in Applications, select **Open**, and confirm **Open**.
-
-- **Windows (`x86_64`)** — *(Community Verified / CI Built)*:
-  1. Download `rhystic-tracker-windows-setup.exe` (or `rhystic-tracker-windows-x86_64.zip`) from [GitHub Releases](https://github.com/Balthazzahr/Rhystic-Tracker/releases/latest).
-  2. Run the setup installer (or extract the `.zip` archive) and launch `rhystic-tracker.exe`.
-  > **⚠️ Windows Community Release Note**: Windows binaries are built automatically via GitHub Actions CI from our cross-platform codebase. Since primary development and testing takes place on Linux, Windows releases have not undergone direct local QA. If you discover any bugs or path issues on Windows, please report them on [GitHub Issues](https://github.com/Balthazzahr/Rhystic-Tracker/issues)!
+| Layer | Directory | Responsibilities |
+| :--- | :--- | :--- |
+| **Desktop Rust Core** | `src-tauri/src/` | Real-time `Player.log` tailing (`tailer.rs`), string-aware JSON stream framing (`main.rs`), GRE state & combat achievement engine (`parser.rs`, `match_assembler.rs`, `deck_achievements.rs`), local SQLite persistence (`db.rs`), Scryfall/MTGA card database indexing (`card_db.rs`), Tauri IPC commands (`commands/`), and opt-in sync outbox (`sync.rs`). |
+| **Desktop React UI** | `src/` | WUBRG color-identity themed glassmorphic interface (`App.tsx`), `LiveHUDView.tsx`, `LiveDeckView.tsx`, customizable Bento `DashboardView.tsx` (`components/dashboard/widgets/`), `MatchHistoryView.tsx`, `DeckLibraryView.tsx`, `CardLibraryView.tsx`, `AchievementsView.tsx`, `LeaderboardsView.tsx`, and `SettingsView.tsx`. |
+| **Community Meta Server** | `server/src/` | Self-hostable Rust (`axum` + `sqlx`) ingestion & analytics server (`main.rs`, `lib.rs`), analytical SQLite schema with idempotent `match_hash` deduplication and First-Seen Handle Pinning (`db.rs`), and the SSR/SPA Community Web Portal (`portal.rs`). |
 
 ---
 
-### Option 4: Build from Source
+## 🚀 Installation & Build Instructions
 
-If you prefer to compile from source or clone the repository:
+### 1. Prebuilt Packages & Releases
+Prebuilt bundles generated via `tauri build` target:
+- **Linux:** `.deb` (Debian/Ubuntu/Pop!\_OS), `.rpm` (Fedora/RHEL/openSUSE), AppImage / `.tar.gz`, and Arch Linux AUR (`packaging/aur/`).
+- **macOS:** Universal `.dmg` / `.app` bundle.
+- **Windows:** `.exe` (NSIS installer) and `.msi`.
 
-#### 1. Install System Dependencies
+> **Runtime Dependencies (Linux):** Ensure `webkit2gtk-4.1` and `libappindicator-gtk3` (or `libayatana-appindicator3-1` on Debian/Ubuntu) are installed on your host system.
+> **Wayland / Steam Deck Note:** Rhystic Tracker runs with `GDK_BACKEND=x11 WEBKIT_DISABLE_COMPOSITING_MODE=1` (configured automatically by the installer desktop entry).
 
-Rhystic Tracker uses Tauri v2, which requires WebKitGTK and standard GTK3 build libraries on Linux.
+---
 
-**Debian / Ubuntu / Pop!\_OS / Linux Mint:**
+### 2. Building from Source (Linux, macOS, Windows)
 
+#### System Prerequisites
+- **Node.js** (v18+) & **npm**
+- **Rust Toolchain** (`rustup`, stable)
+- **Platform WebView & GTK3 Development Headers (Linux only):**
+  - **Debian / Ubuntu / Linux Mint / Pop!\_OS:**
+    ```bash
+    sudo apt update
+    sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev build-essential curl wget file libssl-dev libjavascriptcoregtk-4.1-dev nodejs npm
+    ```
+  - **Fedora / RHEL:**
+    ```bash
+    sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel openssl-devel @development-tools nodejs npm
+    ```
+  - **Arch Linux / CachyOS / Manjaro:**
+    ```bash
+    sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget openssl appmenu-gtk-module libappindicator-gtk3 librsvg nodejs npm
+    ```
+
+#### Standard Development & Production Build
 ```bash
-sudo apt update
-sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev build-essential curl wget file libssl-dev libjavascriptcoregtk-4.1-dev nodejs npm
-```
-
-**Arch Linux / Omarchy / Manjaro:**
-
-```bash
-sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget openssl appmenu-gtk-module libappindicator-gtk3 librsvg nodejs npm
-```
-
-**Fedora / RHEL:**
-
-```bash
-sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel openssl-devel @development-tools nodejs npm
-```
-
-**macOS:**
-
-```bash
-xcode-select --install
-```
-
-#### 2. Install Node.js & Rust (if not already installed)
-
-- [Node.js](https://nodejs.org/) (v18+)
-- [Rust](https://www.rust-lang.org/tools/install): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-
-#### 3. Clone, Build, and Install
-
-```bash
-# Clone the repository
-git clone https://github.com/Balthazzahr/Rhystic-Tracker.git
-cd Rhystic-Tracker
-
-# Install dependencies and build self-contained release app
+# 1. Install frontend dependencies
 npm install
+
+# 2. Run in development mode with hot-reload
+npm run tauri dev
+
+# 3. Build a standalone release binary (no OS installer bundle)
 npm run build:app
 
-# Run installer to place binary and desktop shortcuts
-./install.sh
+# 4. Or build full platform installer bundles (.deb, .rpm, .dmg, .exe)
+npm run tauri build
 ```
 
 ---
 
-### 📦 Runtime Dependencies (For Pre-built Binaries)
+### 3. Linux / Bazzite / Distrobox Helper Workflow (`./scripts/install-linux.sh`)
 
-If running the pre-built release binary on a minimal or newly installed Linux system, ensure the WebKitGTK 4.1 runtime is present:
-
-- **Pop!\_OS / Ubuntu / Debian:** `sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1`
-- **Arch Linux:** `sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3`
-- **Fedora:** `sudo dnf install webkit2gtk4.1 libappindicator-gtk3`
-
----
-
-### 🖥️ Wayland / Steam Deck Note
-
-Rhystic Tracker requires **X11** or **XWayland**. The desktop launcher installed by `install.sh` automatically sets `GDK_BACKEND=x11`, so it works on both X11 and Wayland sessions out of the box. If you launch the binary directly from a terminal on a Wayland-only session, prepend the env var:
+For Linux desktops—including immutable distributions like **Bazzite** and **Fedora Silverblue** where `webkit2gtk4.1-devel` lives inside a `distrobox` container rather than on the host—use [`scripts/install-linux.sh`](scripts/install-linux.sh):
 
 ```bash
-GDK_BACKEND=x11 rhystic-tracker
+# Build (automatically entering distrobox 'fedora-dev' if needed),
+# install to ~/.local/bin/rhystic-tracker, register icons + .desktop launcher, and launch:
+./scripts/install-linux.sh
+
+# Build and install without launching:
+./scripts/install-linux.sh --no-run
+
+# Install the existing release binary and launch without rebuilding:
+./scripts/install-linux.sh --no-build
+
+# Override the Distrobox container name (defaults to 'fedora-dev'):
+RHYSTIC_DISTROBOX=my-dev-box ./scripts/install-linux.sh
 ```
 
 ---
 
-### 🗑️ Uninstall
+### 4. Running the Optional Axum Community Server (`server/`)
+
+You can self-host the Rhystic Community Meta & Web Portal locally or on a VPS:
 
 ```bash
-rm ~/.local/bin/rhystic-tracker \
-   ~/.local/share/applications/rhystic-tracker.desktop \
-   ~/.local/share/icons/hicolor/512x512/apps/rhystic-tracker.png
+cd server
+cargo run --release
 ```
 
-Your match data in `~/.config/rhystic-tracker/rhystic.db` is preserved and can be backed up or deleted separately.
+By default, the server listens on `http://0.0.0.0:8080` and creates its analytical SQLite database at `./rhystic_meta.db`. You can customize both via environment variables:
+
+```bash
+RHYSTIC_SERVER_ADDR="127.0.0.1:8080" \
+RHYSTIC_SERVER_DB="/var/lib/rhystic/rhystic_meta.db" \
+cargo run --release
+```
+
+- **Web Portal UI:** Open `http://localhost:8080/` in your browser.
+- **Desktop Client Sync:** In the desktop app, open **Settings → Connections & Cloud Sync**, set the Server URL to `http://localhost:8080`, enable Community Meta Sync, and click **Sync Historical Matches**.
 
 ---
 
-## 📄 License
+## 📄 License & Copyright
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the **[MIT License](LICENSE)**.
+
+```text
+Copyright (c) 2026 Balthazzahr (https://github.com/Balthazzahr)
+Copyright (c) 2026 Matthias Löhr / GitHub Handle: Matt4C6F656872 (Fork modifications and additions)
+```
+
+See [LICENSE](LICENSE) for the full license text and permission notice.

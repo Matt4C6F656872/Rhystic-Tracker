@@ -157,4 +157,9 @@ Currently, Best-of-3 (Traditional) matches store a single row in `matches` where
   - True per-game turn clocks for `Gotta Go Fast` ($\le 4$ turns in a single game) and `Marathon Master` ($\ge 20$ turns in a single game).
   - Post-sideboard win-rate deltas (Game 1 WR vs. Games 2–3 post-board WR).
 
+### C. Standalone Server Packaging & Multi-OS Release Automation (Scheduled for v2.1.0)
+- **Standalone Community Server Packaging:** Containerized Docker/OCI image (`Dockerfile` + `docker-compose.yml`) and `systemd` service unit for one-command deployment of `rhystic-cloud-server`.
+- **GitHub Actions Multi-OS Release Pipeline:** Automated release workflows building and publishing signed Linux (`.deb`, `.rpm`, `.tar.gz`), macOS Universal (`.dmg`), Windows (`.exe` / `.msi`), and standalone server binaries on every version tag.
+
+
 

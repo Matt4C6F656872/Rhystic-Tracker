@@ -1,6 +1,6 @@
 [package]
 name = "rhystic-cloud-server"
-version = "0.1.0"
+version = "2.0.0"
 description = "Rhystic Cloud — Opt-in Anonymized Match Ingestion & Commander/Brawl Meta Analytics Server"
 edition = "2021"
 license = "MIT"
