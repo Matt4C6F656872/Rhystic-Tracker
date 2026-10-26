@@ -1,16 +1,20 @@
 //! Rhystic Cloud — Opt-in Anonymized Match Ingestion & Meta Analytics API.
 //!
 //! Endpoints:
+//! - `GET  /` -> Community Meta & Companion Web Portal (Phase 5)
 //! - `GET  /health` -> Service status & aggregate match/contributor counts
 //! - `POST /api/v1/matches` -> Single anonymized match payload ingestion
 //! - `POST /api/v1/matches/batch` -> Batch anonymized match ingestion (`{ matches: [...] }`)
 //! - `GET  /api/v1/meta/formats` -> Format-by-format meta breakdown (turns, play/draw WR, Salt Index)
+//! - `GET  /api/v1/meta/decks` -> Archetype clusters, Core vs. Flex-Slot WR deltas & exact variants
 //! - `GET  /api/v1/meta/commanders` -> Commander & Brawl tier list (`?format=Commander&min_matches=1`)
 //! - `GET  /api/v1/meta/cards` -> Card seen win rates & micro-combat stats (`?format=...&commander_grp_id=...`)
 //! - `GET  /api/v1/meta/matchups` -> Head-to-head Commander matchup matrix (`?commander_grp_id=...&format=...`)
+//! - `GET  /api/v1/leaderboards` -> Global log-verified Player Leaderboards & Combat Hall of Fame
 
 pub mod db;
 pub mod models;
+pub mod portal;
 
 use axum::{
     extract::{Query, State},
@@ -20,22 +24,26 @@ use axum::{
 };
 use db::AnalyticalDb;
 use models::{
-    AnonymizedMatchPayload, BatchIngestRequest, CardPerformanceEntry, CommanderMatchupEntry,
-    CommanderTierEntry, FormatMetaSummary, HealthResponse, IngestResponse,
+    AnonymizedMatchPayload, ArchetypeMetaEntry, BatchIngestRequest, CardPerformanceEntry,
+    CommanderMatchupEntry, CommanderTierEntry, FormatMetaSummary, GlobalLeaderboardsResponse,
+    HealthResponse, IngestResponse,
 };
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
 
 pub fn build_router(db: AnalyticalDb) -> Router {
     Router::new()
+        .route("/", get(portal::portal_index_handler))
         .route("/health", get(health_handler))
         .route("/v1/ingest", post(ingest_batch_handler))
         .route("/api/v1/matches", post(ingest_single_handler))
         .route("/api/v1/matches/batch", post(ingest_batch_handler))
         .route("/api/v1/meta/formats", get(meta_formats_handler))
+        .route("/api/v1/meta/decks", get(meta_decks_handler))
         .route("/api/v1/meta/commanders", get(meta_commanders_handler))
         .route("/api/v1/meta/cards", get(meta_cards_handler))
         .route("/api/v1/meta/matchups", get(meta_matchups_handler))
+        .route("/api/v1/leaderboards", get(leaderboards_handler))
         .layer(CorsLayer::permissive())
         .with_state(db)
 }
@@ -112,6 +120,23 @@ async fn meta_formats_handler(
 }
 
 #[derive(Debug, Deserialize)]
+pub struct DecksQuery {
+    pub format: Option<String>,
+    pub min_matches: Option<i64>,
+}
+
+async fn meta_decks_handler(
+    State(db): State<AnalyticalDb>,
+    Query(q): Query<DecksQuery>,
+) -> Result<Json<Vec<ArchetypeMetaEntry>>, (StatusCode, String)> {
+    let list = db
+        .get_archetype_meta(q.format.as_deref(), q.min_matches.unwrap_or(1))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(list))
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CommandersQuery {
     pub format: Option<String>,
     pub min_matches: Option<i64>,
@@ -167,10 +192,27 @@ async fn meta_matchups_handler(
     Ok(Json(list))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct LeaderboardsQuery {
+    pub format: Option<String>,
+    pub limit: Option<i64>,
+}
+
+async fn leaderboards_handler(
+    State(db): State<AnalyticalDb>,
+    Query(q): Query<LeaderboardsQuery>,
+) -> Result<Json<GlobalLeaderboardsResponse>, (StatusCode, String)> {
+    let res = db
+        .get_global_leaderboards(q.format.as_deref(), q.limit.unwrap_or(50))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(res))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{SyncCardEntry, SyncImpactfulEntry};
+    use crate::models::{SyncCardEntry, SyncDeckCardEntry, SyncImpactfulEntry};
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -206,19 +248,30 @@ mod tests {
             hero_mulligans: 0,
             opponent_mulligans: 0,
             hero_commander_id: Some(commander),
+            hero_commander_name: Some("Atraxa, Praetors' Voice".to_string()),
             companion_grp_id: None,
             opponent_commander_id: Some(opp_commander),
+            opponent_commander_name: Some("Ragavan, Nimble Pilferer".to_string()),
             opponent_companion_grp_id: None,
+            player_handle: None,
+            player_account_hash: None,
+            player_rank: None,
+            deck_hash: None,
+            archetype_hash: None,
+            color_identity: None,
+            deck_cards: Vec::new(),
             cards_seen: vec![
                 SyncCardEntry {
                     grp_id: 90001, // Rhystic Study
                     is_opponent: false,
                     count: 1,
+                    card_name: Some("Rhystic Study".to_string()),
                 },
                 SyncCardEntry {
                     grp_id: 90002, // Craterhoof Behemoth
                     is_opponent: false,
                     count: 1,
+                    card_name: Some("Craterhoof Behemoth".to_string()),
                 },
             ],
             impactful_cards: vec![
@@ -231,6 +284,7 @@ mod tests {
                     cards_drawn: 7,
                     counters_added: 0,
                     titles: vec!["Rhystic Tracker (Gold)".to_string()],
+                    card_name: Some("Rhystic Study".to_string()),
                 },
                 SyncImpactfulEntry {
                     grp_id: 90002,
@@ -244,6 +298,7 @@ mod tests {
                         "Over Killer (Gold)".to_string(),
                         "Scoop Inducer (Silver)".to_string(),
                     ],
+                    card_name: Some("Craterhoof Behemoth".to_string()),
                 },
             ],
         }
@@ -356,6 +411,7 @@ mod tests {
         assert_eq!(commanders.len(), 1);
         let c = &commanders[0];
         assert_eq!(c.commander_grp_id, 77701);
+        assert_eq!(c.commander_name.as_deref(), Some("Atraxa, Praetors' Voice"));
         assert_eq!(c.matches, 4);
         assert_eq!(c.wins, 3);
         assert!((c.win_rate - 0.75).abs() < 1e-4);
@@ -380,6 +436,7 @@ mod tests {
             serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
         assert_eq!(cards.len(), 2);
         let study = cards.iter().find(|x| x.grp_id == 90001).unwrap();
+        assert_eq!(study.card_name.as_deref(), Some("Rhystic Study"));
         assert_eq!(study.matches_seen, 4);
         assert_eq!(study.wins_when_seen, 3);
         assert_eq!(study.total_cards_drawn, 28); // 7 cards * 4 matches
@@ -465,5 +522,170 @@ mod tests {
             .unwrap();
         assert_eq!(report.accepted, 2);
         assert_eq!(report.rejected, 1);
+    }
+
+    #[tokio::test]
+    async fn archetype_core_flex_explorer_leaderboards_and_portal_work() {
+        let db = AnalyticalDb::connect(":memory:").await.unwrap();
+        let app = build_router(db.clone());
+
+        // 2 matches in the same archetype cluster ("arch_WR_boros"):
+        // Both include Heartfire Hero (100% -> Core), only Match 1 includes Sheltered by Ghosts (50% -> Flex, +50% WR delta)
+        let mut m1 = sample_commander_match("rh_arch_1", "u1", "Win", None, true, 6, 0, 0);
+        m1.format = "Standard Ranked".to_string();
+        m1.hero_commander_id = None;
+        m1.opponent_commander_id = None;
+        m1.player_handle = Some("MattArena".to_string());
+        m1.player_account_hash = Some("acc_verified_matt_123".to_string());
+        m1.player_rank = Some("Mythic 1".to_string());
+        m1.color_identity = Some("WR".to_string());
+        m1.archetype_hash = Some("arch_WR_boros".to_string());
+        m1.deck_hash = Some("dh_var1".to_string());
+        m1.deck_cards = vec![
+            SyncDeckCardEntry {
+                grp_id: 5001,
+                count: 4,
+                card_name: Some("Heartfire Hero".to_string()),
+                is_basic_land: false,
+            },
+            SyncDeckCardEntry {
+                grp_id: 5002,
+                count: 2,
+                card_name: Some("Sheltered by Ghosts".to_string()),
+                is_basic_land: false,
+            },
+        ];
+
+        let mut m2 = m1.clone();
+        m2.match_hash = "rh_arch_2".to_string();
+        m2.result = "Loss".to_string();
+        m2.deck_hash = Some("dh_var2".to_string());
+        m2.deck_cards = vec![SyncDeckCardEntry {
+            grp_id: 5001,
+            count: 4,
+            card_name: Some("Heartfire Hero".to_string()),
+            is_basic_land: false,
+        }];
+
+        db.ingest_batch(&[m1, m2]).await.unwrap();
+
+        // 1. Check /api/v1/meta/decks
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/meta/decks?format=Standard%20Ranked")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let decks: Vec<ArchetypeMetaEntry> =
+            serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(decks.len(), 1);
+        let arch = &decks[0];
+        assert_eq!(arch.matches, 2);
+        assert_eq!(arch.core_cards.len(), 1);
+        assert_eq!(arch.core_cards[0].card_name.as_deref(), Some("Heartfire Hero"));
+        assert!((arch.core_cards[0].inclusion_rate - 1.0).abs() < 1e-4);
+        assert_eq!(arch.flex_cards.len(), 1);
+        assert_eq!(arch.flex_cards[0].card_name.as_deref(), Some("Sheltered by Ghosts"));
+        assert!((arch.flex_cards[0].inclusion_rate - 0.5).abs() < 1e-4);
+        assert!((arch.flex_cards[0].win_rate_delta - 0.5).abs() < 1e-4); // 100% WR vs 50% base = +50%
+        assert_eq!(arch.variants.len(), 2);
+
+        // 2. Check /api/v1/leaderboards
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/leaderboards")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let lb: GlobalLeaderboardsResponse =
+            serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(lb.players.len(), 1);
+        assert_eq!(lb.players[0].player_handle, "MattArena");
+        assert_eq!(lb.players[0].latest_rank.as_deref(), Some("Mythic 1"));
+        assert!(!lb.combat_records.is_empty());
+
+        // 3. Check Web Portal HTML at GET /
+        let resp = app
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let html_bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let html_str = String::from_utf8_lossy(&html_bytes);
+        assert!(html_str.contains("Unified Archetype &amp; Flex-Slot Explorer"));
+    }
+
+    #[tokio::test]
+    async fn first_seen_handle_pinning_binds_owner_and_strips_spoofed_handles() {
+        // Verify SHA-256 against NIST standard vector ("abc")
+        assert_eq!(
+            db::sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+
+        let db = AnalyticalDb::connect(":memory:").await.unwrap();
+
+        // 1. Legitimate owner ("owner-secret-uuid-1") syncs first match with handle "ReidDuke"
+        let mut owner_m1 = sample_commander_match(
+            "rh_claim_1",
+            "owner-secret-uuid-1",
+            "Win",
+            None,
+            true,
+            9,
+            77701,
+            88801,
+        );
+        owner_m1.player_handle = Some("ReidDuke".to_string());
+        owner_m1.player_account_hash = Some("acc_reid_real_001".to_string());
+        owner_m1.player_rank = Some("Mythic #12".to_string());
+
+        let r1 = db.ingest_batch(&[owner_m1.clone()]).await.unwrap();
+        assert_eq!(r1.accepted, 1);
+
+        // 2. Spoofer ("spoofer-uuid-999") edits their local Player.log to impersonate "ReidDuke"
+        //    (testing both exact account_hash copy and forged account_hash with same handle case-insensitively)
+        let mut spoof_same_acc = owner_m1.clone();
+        spoof_same_acc.match_hash = "rh_spoof_1".to_string();
+        spoof_same_acc.contributor_id = "spoofer-uuid-999".to_string();
+        spoof_same_acc.result = "Loss".to_string();
+
+        let mut spoof_same_handle = owner_m1.clone();
+        spoof_same_handle.match_hash = "rh_spoof_2".to_string();
+        spoof_same_handle.contributor_id = "spoofer-uuid-999".to_string();
+        spoof_same_handle.player_handle = Some("reidduke".to_string());
+        spoof_same_handle.player_account_hash = Some("acc_forged_999".to_string());
+        spoof_same_handle.result = "Loss".to_string();
+
+        // Batch ingestion succeeds (anonymous match telemetry is preserved), but spoofed handles are stripped
+        let r2 = db
+            .ingest_batch(&[spoof_same_acc, spoof_same_handle])
+            .await
+            .unwrap();
+        assert_eq!(r2.accepted, 2);
+
+        // 3. Owner syncs a second match using the original secret contributor_id
+        let mut owner_m2 = owner_m1.clone();
+        owner_m2.match_hash = "rh_claim_2".to_string();
+        let r3 = db.ingest_batch(&[owner_m2]).await.unwrap();
+        assert_eq!(r3.accepted, 1);
+
+        // 4. Verify Global Leaderboard only counts the 2 legitimate owner matches (100% WR), ignoring the 2 spoofed losses
+        let lb = db.get_global_leaderboards(None, 50).await.unwrap();
+        assert_eq!(lb.players.len(), 1);
+        assert_eq!(lb.players[0].player_handle, "ReidDuke");
+        assert_eq!(lb.players[0].matches, 2);
+        assert_eq!(lb.players[0].wins, 2);
+        assert!((lb.players[0].win_rate - 1.0).abs() < 1e-4);
     }
 }

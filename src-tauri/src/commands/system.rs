@@ -620,6 +620,8 @@ pub async fn set_always_on_top(window: tauri::Window, enabled: bool) -> Result<(
 #[tauri::command]
 pub async fn get_sync_settings_status() -> Result<serde_json::Value, String> {
     let db = DatabaseManager::init().await.map_err(|e| e.to_string())?;
+    let log_path = resolve_effective_log_path();
+    crate::sync::ensure_verified_identity_from_log(&log_path);
     let cfg = crate::sync::load_sync_config();
     let stats = crate::sync::get_outbox_stats(&db).await;
     Ok(serde_json::json!({
@@ -627,6 +629,10 @@ pub async fn get_sync_settings_status() -> Result<serde_json::Value, String> {
         "contributor_id": cfg.contributor_id,
         "server_url": cfg.server_url,
         "include_deck_cards": cfg.include_deck_cards,
+        "share_full_decklist": cfg.share_full_decklist,
+        "share_player_identity": cfg.share_player_identity,
+        "verified_arena_handle": cfg.verified_arena_handle,
+        "arena_account_hash": cfg.arena_account_hash,
         "sync_key": cfg.sync_key,
         "pending_count": stats.pending_count,
         "synced_count": stats.synced_count,
@@ -640,9 +646,14 @@ pub async fn update_sync_settings(
     enabled: bool,
     server_url: Option<String>,
     include_deck_cards: Option<bool>,
+    share_full_decklist: Option<bool>,
+    share_player_identity: Option<bool>,
     sync_key: Option<String>,
     rotate_contributor_id: Option<bool>,
+    custom_contributor_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
+    let log_path = resolve_effective_log_path();
+    crate::sync::ensure_verified_identity_from_log(&log_path);
     let mut cfg = crate::sync::load_sync_config();
     cfg.enabled = enabled;
     if let Some(url) = server_url {
@@ -654,11 +665,25 @@ pub async fn update_sync_settings(
     if let Some(inc) = include_deck_cards {
         cfg.include_deck_cards = inc;
     }
+    if let Some(full) = share_full_decklist {
+        cfg.share_full_decklist = full;
+    }
+    if let Some(ident) = share_player_identity {
+        cfg.share_player_identity = ident;
+    }
     if let Some(key) = sync_key {
         let trimmed = key.trim().to_string();
         cfg.sync_key = if trimmed.is_empty() { None } else { Some(trimmed) };
     }
-    if rotate_contributor_id.unwrap_or(false) {
+    if let Some(custom_id) = custom_contributor_id {
+        let trimmed = custom_id.trim();
+        if !trimmed.is_empty() {
+            if trimmed.len() < 8 || trimmed.len() > 128 {
+                return Err("Contributor token must be between 8 and 128 characters.".to_string());
+            }
+            cfg.contributor_id = trimmed.to_string();
+        }
+    } else if rotate_contributor_id.unwrap_or(false) {
         cfg.contributor_id = crate::sync::generate_anonymous_uuid();
     }
     crate::sync::save_sync_config(&cfg)?;
@@ -666,7 +691,7 @@ pub async fn update_sync_settings(
         let cfg_clone = cfg.clone();
         tokio::spawn(async move {
             if let Some(db) = DatabaseManager::init().await.ok() {
-                let _ = crate::sync::enqueue_historical_matches(&db, &cfg_clone).await;
+                let _ = crate::sync::refresh_historical_outbox(&db, &cfg_clone).await;
                 let _ = crate::sync::flush_outbox_batch(&db, &cfg_clone, 500).await;
             }
         });
@@ -677,8 +702,10 @@ pub async fn update_sync_settings(
 #[tauri::command]
 pub async fn enqueue_historical_sync() -> Result<serde_json::Value, String> {
     let db = DatabaseManager::init().await.map_err(|e| e.to_string())?;
+    let log_path = resolve_effective_log_path();
+    crate::sync::ensure_verified_identity_from_log(&log_path);
     let cfg = crate::sync::load_sync_config();
-    let queued = crate::sync::enqueue_historical_matches(&db, &cfg).await?;
+    let queued = crate::sync::refresh_historical_outbox(&db, &cfg).await?;
     let mut flushed_count = 0usize;
     let mut last_error = None;
     if cfg.enabled {

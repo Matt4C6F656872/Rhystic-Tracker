@@ -734,7 +734,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const tabs: { id: SettingsTab; label: string; icon: string }[] = [
     { id: 'general', label: 'General & Behavior', icon: 'ms-ability-prototype' },
     { id: 'appearance', label: 'Appearance & Themes', icon: 'ms-ability-party' },
-    { id: 'connection', label: 'MTGA Connection', icon: 'ms-ability-adventure' },
+    { id: 'connection', label: 'Connections & Cloud Sync', icon: 'ms-ability-adventure' },
     { id: 'storage', label: 'Storage & Database', icon: 'ms-library' },
     { id: 'about', label: 'About & Legal', icon: 'ms-battle' },
   ];

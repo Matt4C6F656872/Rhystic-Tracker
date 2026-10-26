@@ -110,11 +110,51 @@ flowchart TD
 - [x] Setup the analytical storage layer in [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs) (`ingested_matches`, `ingested_match_cards`, `ingested_impactful_cards` with idempotent `match_hash` deduplication and composite indexes) covering all MTGA Constructed, Commander/Brawl, and Limited formats (excluding Alchemy).
 - [x] Implement public REST endpoints for format meta (`/api/v1/meta/formats`), Commander & Brawl tier lists + Salt Index (`/api/v1/meta/commanders`), card seen win rates & micro-combat stats (`/api/v1/meta/cards`), and head-to-head Commander matchups (`/api/v1/meta/matchups`).
 
-### Phase 4.5: Granular Data-Sharing Tiers, Archetype Clustering & Global Leaderboards
-- [ ] Expand `SyncConfig` and [`ConnectionTab.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/settings/ConnectionTab.tsx) with granular opt-in checkboxes (`share_card_telemetry`, `share_full_decklist`, `share_player_identity` with custom/sanitized display handle).
-- [ ] Add `deck_hash`, `color_identity`, `archetype_tag`, `deck_cards` (maindeck `grp_id` quantities), and optional `player_display_name` + `rank_tier` to `AnonymizedMatchPayload` and [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs).
-- [ ] Implement Constructed Archetype & Decklist clustering (`GET /api/v1/meta/decks`) and Global Player / Hall of Fame Leaderboards (`GET /api/v1/leaderboards/players`, `GET /api/v1/leaderboards/records`).
+### Phase 4.5: Granular Data-Sharing Tiers, Archetype Clustering & Global Leaderboards (Completed)
+- [x] Expand `SyncConfig` and [`ConnectionTab.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/settings/ConnectionTab.tsx) with granular opt-in checkboxes (`include_deck_cards`, `share_full_decklist`, and `share_player_identity` using a read-only log-detected MTG Arena handle from `AuthenticateResponse` stripped of `#12345` + `arena_account_hash`).
+- [x] Add `deck_hash` (collapsing basic land printings), `archetype_hash`, `color_identity`, `deck_cards` (maindeck `grp_id` quantities), card names, and optional claimed `player_handle` + `player_rank` to `AnonymizedMatchPayload` in [`src-tauri/src/sync.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/sync.rs) and [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs).
+- [x] Implement server-side **First-Seen Handle Pinning (`claimed_handles`)** in [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs) binding each handle and `player_account_hash` to the SHA-256 digest of the owner's secret `contributor_id` token, plus cross-device token copy/restore in [`ConnectionTab.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/settings/ConnectionTab.tsx).
+- [x] Implement Archetype & Core/Flex-Slot clustering (`GET /api/v1/meta/decks`) and Global Claimed Player / Hall of Fame Leaderboards (`GET /api/v1/leaderboards`) in [`server/src/lib.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/lib.rs).
 
-### Phase 5: Web Companion & Community Portal (`web/` or served by `server/`)
-- [ ] Build a responsive web portal matching the local Rhystic Tracker dark glassmorphic aesthetic (Mana themes, Keyrune/Mana-font icons, Scryfall card art backdrops) for browsing Global Meta Tier Lists, Archetype Decklists, Card Win Rates, Global Player Leaderboards, and iPad Companion views.
+### Phase 5: Web Companion & Community Portal (`server/src/portal.rs`) (Completed)
+- [x] Build a responsive Web Companion & Community Portal served at `GET /` in [`server/src/portal.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/portal.rs) matching the local Rhystic Tracker dark glassmorphic aesthetic, featuring the **Unified Archetype & Core + Flex-Slot Explorer** (side-by-side Core $\ge 70\%$ vs. Flex $< 70\%$ Win-Rate Delta table and in-place Variant Switcher), All-Format Matrix, Commander & Brawl Tier Lists + Salt Index, Card Performance with Scryfall hover previews, and Global Claimed Player Leaderboards.
+
+---
+
+## 5. Security & Next-Generation Technical Roadmap (Phase 6+)
+
+### A. Two-Layer Arena Handle Security Model (Threat Model, Pinning & Dispute Recovery)
+Because MTG Arena does not provide a public OAuth2 provider and writes `Player.log` as unencrypted plaintext on the user's local filesystem, any local-log-only check can theoretically be tampered with by a user who edits their own `Player.log`. Rhystic Cloud addresses this with a **2-Layer Handle Security Model**:
+
+1. **Layer 1 — Server-Side First-Seen Token Pinning (`claimed_handles` — Implemented):**
+   - When a handle (`display_handle` / `player_account_hash`) is synced for the first time, [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs) records a binding between the normalized handle, `player_account_hash`, and `SHA-256("rhystic-handle-claim-v1:" || contributor_id)` in the `claimed_handles` table.
+   - If another user sees a streamer's `screenName#12345` or `clientId` on stream and edits their local `Player.log` to match it, their client does not possess the original owner's secret `contributor_id` UUID. The server cleanly strips the spoofed handle attribution while still accepting the anonymous match telemetry.
+   - **Cross-Device & OS Reinstall Recovery:** Users can copy and restore their secret `contributor_id` token directly in [`ConnectionTab.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/settings/ConnectionTab.tsx) (`Settings -> Connections & Cloud Sync`) or back up `sync_settings.json` so they never lock themselves out of their claimed handle when switching PCs.
+2. **Layer 2 — Handle Squatting Dispute & Reclaim Protocol (Planned Phase 6):**
+   - *The Edge Case:* A malicious user could attempt to pre-emptively squat a famous streamer's handle before that streamer installs Rhystic Tracker.
+   - *Why Local-Log Challenges Alone Are Insufficient:* Any challenge that relies solely on reading local `Player.log` text (such as naming a local deck a specific nonce) can also be forged by editing `Player.log`.
+   - *Sanctioned Reclaim Mechanisms:*
+     - **Verified Direct-Challenge Match Proof:** The claimant plays a 1-turn Direct Challenge against an official RhysticVerifier bot/admin account in MTG Arena; the verifier's own trusted client observes the opponent's full `screenName#12345` and `clientId` directly from the WotC game server and re-binds `claimed_handles.owner_token_hash` to the rightful owner's `contributor_id`.
+     - **Social / Streamer Verification Badge:** Optional Twitch / YouTube / Discord OAuth link on the Community Portal for recognized creators and tournament competitors, granting a distinct `Verified Creator` badge separate from standard `Log-Detected / Claimed` handles.
+
+### B. Relational Best-of-3 (`match_games`) Tracking (Planned Phase 6)
+Currently, Best-of-3 (Traditional) matches store a single row in `matches` where `turns` is accumulated across completed games (`completed_games_turns + current_game_turns` in [`match_assembler.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/match_assembler.rs)). While this prevents Game 3 early concessions from misreporting a 30-turn Bo3 series as a 2-turn match, it conflates multi-game series duration with single-game clock speed (`Gotta Go Fast`, `Marathon Master`, and format `avg_turns`).
+
+- **Parent `matches` Table (Series-Level):**
+  - Stores `match_id`, `format`, `series_result` (`Win`/`Loss`), `games_won`, `games_lost`, `total_duration_seconds`, `total_turns`, `hero_deck_name`, `opponent_name`, and `timestamp`.
+- **Child `match_games` Table (Per-Game Level):**
+  - `match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE`
+  - `game_number INTEGER NOT NULL` (`1`, `2`, `3`)
+  - `on_the_play INTEGER NOT NULL` (per-game Play/Draw tracking, since Play/Draw alternates in Games 2 & 3)
+  - `hero_mulligans INTEGER NOT NULL`, `opponent_mulligans INTEGER NOT NULL`
+  - `turns INTEGER NOT NULL`, `duration_seconds INTEGER NOT NULL`
+  - `result TEXT NOT NULL`, `result_reason TEXT`
+  - `hero_starting_life INTEGER`, `hero_end_life INTEGER`, `hero_min_life INTEGER`, `opponent_end_life INTEGER`
+  - `sideboard_in_json TEXT`, `sideboard_out_json TEXT` (cards boarded in/out prior to Game 2 and Game 3)
+  - `PRIMARY KEY (match_id, game_number)`
+- **Analytical Benefits:**
+  - Accurate per-game Play vs. Draw win rates in Traditional (Bo3) Constructed and Traditional Draft.
+  - True per-game turn clocks for `Gotta Go Fast` ($\le 4$ turns in a single game) and `Marathon Master` ($\ge 20$ turns in a single game).
+  - Post-sideboard win-rate deltas (Game 1 WR vs. Games 2–3 post-board WR).
+
 
