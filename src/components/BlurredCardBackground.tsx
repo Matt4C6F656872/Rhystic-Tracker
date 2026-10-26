@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { ensureLocalImage } from '../utils/cardImageCache';
 
 // Module-scoped last pick so it survives across tab navigations
@@ -135,7 +136,6 @@ export const BlurredCardBackground: React.FC<BlurredCardBackgroundProps> = ({
         let localUrl: string | null = null;
         if (presetVal.startsWith('custom:')) {
           const filePath = presetVal.slice(7);
-          const { convertFileSrc } = await import('@tauri-apps/api/core');
           localUrl = convertFileSrc(filePath);
         } else {
           localUrl = await ensureLocalImage(presetVal, 'art_crop');

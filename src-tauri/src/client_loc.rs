@@ -1,44 +1,13 @@
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 static PRECON_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
-static PRECON_VALUES: OnceLock<HashSet<String>> = OnceLock::new();
 
 fn get_precon_dict() -> &'static HashMap<String, String> {
     PRECON_NAMES.get_or_init(|| {
         let json_data = include_str!("precon_deck_names.json");
         serde_json::from_str(json_data).unwrap_or_default()
     })
-}
-
-pub fn is_precon_name(name: &str) -> bool {
-    let values = PRECON_VALUES.get_or_init(|| {
-        get_precon_dict().values().map(|s| s.to_lowercase()).collect()
-    });
-    values.contains(&name.trim().to_lowercase())
-}
-
-/// Locates the MTGA ClientLocalization SQLite file in the same directory as Raw_CardDatabase.
-pub fn find_client_loc_db() -> Option<PathBuf> {
-    let raw_db = crate::card_db::find_latest_raw_card_db()?;
-    let raw_dir = raw_db.parent()?;
-
-    if let Ok(entries) = std::fs::read_dir(raw_dir) {
-        let mut candidates: Vec<PathBuf> = entries
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| {
-                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-                name.starts_with("Raw_ClientLocalization_") && name.ends_with(".mtga")
-            })
-            .collect();
-        candidates.sort_by(|a, b| b.cmp(a));
-        if let Some(first) = candidates.into_iter().next() {
-            return Some(first);
-        }
-    }
-    None
 }
 
 /// Resolves any deck name, translating ?=?Loc/ keys or returning the clean human name.
@@ -103,13 +72,6 @@ mod tests {
         assert_eq!(resolve_deck_name("?=?Loc/Decks/Precon/Precon_EPP2023_WB"), "Balancing Act");
         assert_eq!(resolve_deck_name("?=?Loc/Decks/Precon/Alchemy_BLB_Frog"), "Hop, Hop, and Away!");
         assert_eq!(resolve_deck_name("?=?Loc/Decks/Precon/2022_WC/Player_DrewB"), "Drew Baker");
-    }
-
-    #[test]
-    fn test_is_precon_name() {
-        assert!(is_precon_name("Vampiric Hunger"));
-        assert!(is_precon_name("Balancing Act"));
-        assert!(!is_precon_name("Identity Crisis"));
     }
 
     #[test]

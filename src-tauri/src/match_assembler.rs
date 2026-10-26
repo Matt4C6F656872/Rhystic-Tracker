@@ -2775,6 +2775,36 @@ impl MatchAssembler {
         }
     }
 
+    pub fn complete_match_for_id(
+        &mut self,
+        match_id: &str,
+        winning_team_id: u32,
+        reason: &str,
+    ) -> Option<(MatchRecord, Vec<MatchCardRecord>, Vec<MatchTurnEventRecord>, Vec<MatchImpactfulRecord>)> {
+        let is_known_id = |id: &str| {
+            let t = id.trim();
+            !t.is_empty() && t != "UNKNOWN_MATCH_ID" && t != "unknown"
+        };
+
+        if let Some(active) = self.active_match.as_mut() {
+            let incoming = match_id.trim();
+            if is_known_id(incoming) && is_known_id(&active.match_id) && active.match_id != incoming {
+                eprintln!(
+                    "[ASSEMBLER] Ignoring out-of-order MatchCompleted for '{}' (active match is '{}')",
+                    incoming, active.match_id
+                );
+                return None;
+            }
+            if !is_known_id(&active.match_id) && is_known_id(incoming) {
+                active.match_id = incoming.to_string();
+            }
+        } else {
+            return None;
+        }
+
+        self.complete_match(winning_team_id, reason)
+    }
+
     pub fn complete_match(&mut self, winning_team_id: u32, reason: &str) -> Option<(MatchRecord, Vec<MatchCardRecord>, Vec<MatchTurnEventRecord>, Vec<MatchImpactfulRecord>)> {
         self.finalize_opening_hand();
 
@@ -4904,5 +4934,28 @@ use super::*;
         assert!(assembler.turn_damage_taken_by_instance.is_empty(), "New match_id must clear turn_damage_taken_by_instance");
         assert!(assembler.last_hero_damage_hit.is_none(), "New match_id must clear last_hero_damage_hit");
         assert_eq!(assembler.completed_games_turns, 0, "New match_id must reset completed_games_turns");
+    }
+
+    #[test]
+    fn test_complete_match_for_id_guards_mismatch_and_populates_unknown_id() {
+        let mut assembler = MatchAssembler::new();
+        assembler.start_match("active-match-111".to_string(), "Standard".to_string(), false);
+
+        // Out-of-order MatchCompleted for a different match_id must NOT close active-match-111
+        let stale = assembler.complete_match_for_id("stale-match-000", 1, "Concede");
+        assert!(stale.is_none(), "Mismatched match_id must be ignored");
+        assert!(assembler.active_match.is_some(), "Active match must remain open after stale completion event");
+
+        // Matching match_id closes the active match
+        let completed = assembler.complete_match_for_id("active-match-111", 1, "Concede");
+        assert!(completed.is_some(), "Matching match_id must complete active match");
+        assert_eq!(completed.unwrap().0.match_id, "active-match-111");
+
+        // If active match started with UNKNOWN_MATCH_ID, a real match_id on completion populates it
+        assembler.start_match("UNKNOWN_MATCH_ID".to_string(), "Brawl".to_string(), false);
+        let populated = assembler
+            .complete_match_for_id("resolved-match-222", 1, "Loss_Life")
+            .expect("Match should complete and populate match_id");
+        assert_eq!(populated.0.match_id, "resolved-match-222");
     }
 }

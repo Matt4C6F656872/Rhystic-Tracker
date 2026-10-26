@@ -8,7 +8,7 @@ import {
   Save,
   Archive,
 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { CardImage } from './CardImage';
 import { APP_VERSION } from '../version';
@@ -158,7 +158,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       }
 
       // Read file bytes via fetch/convertFileSrc
-      const { convertFileSrc } = await import('@tauri-apps/api/core');
       const fileUrl = convertFileSrc(selected);
       const resp = await fetch(fileUrl);
       const blob = await resp.blob();

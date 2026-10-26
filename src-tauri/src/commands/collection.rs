@@ -376,23 +376,10 @@ pub async fn update_collection_card_count(grp_id: i64, count: i64) -> Result<ser
     Ok(serde_json::json!({ "grp_id": grp_id, "owned": owned }))
 }
 
-type CollectionQuery<'q> = sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>;
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum QBind {
     Str(String),
     Int(i64),
-}
-
-fn apply_binds<'q>(q: CollectionQuery<'q>, binds: &'q [QBind]) -> CollectionQuery<'q> {
-    let mut q = q;
-    for b in binds {
-        match b {
-            QBind::Str(s) => { q = q.bind(s.as_str()); }
-            QBind::Int(i) => { q = q.bind(i); }
-        }
-    }
-    q
 }
 
 /// grp_id -> owned_count for every owned card. Ownership is monotonic from

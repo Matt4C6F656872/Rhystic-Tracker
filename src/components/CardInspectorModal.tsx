@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { CustomDropdown } from './CustomDropdown';
 import { ManaFontPip } from './ManaFontPip';
 import { parseMtgaManaCost } from '../utils/manaUtils';
@@ -476,7 +477,6 @@ export const CardInspectorModal: React.FC<CardInspectorModalProps> = ({
                           prev ? { ...prev, card: { ...prev.card, owned_count: newCount } } : prev
                         );
                         try {
-                          const { invoke } = await import('@tauri-apps/api/core');
                           await invoke('update_collection_card_count', {
                             grpId: targetGrp,
                             count: newCount,

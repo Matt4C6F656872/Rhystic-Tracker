@@ -285,8 +285,8 @@ async fn dispatch_parsed_event(
         ParsedEvent::MulliganEvent { seat_id, is_mulligan, num_cards } => {
             assembler.handle_mulligan_decision(seat_id, is_mulligan, num_cards);
         }
-        ParsedEvent::MatchCompleted { winning_team_id, reason, .. } => {
-            if let Some((mut record, card_records, turn_events, impactful)) = assembler.complete_match(winning_team_id, &reason) {
+        ParsedEvent::MatchCompleted { match_id, winning_team_id, reason } => {
+            if let Some((mut record, card_records, turn_events, impactful)) = assembler.complete_match_for_id(&match_id, winning_team_id, &reason) {
                 let hero_gids: Vec<i64> = card_records.iter().filter(|c| !c.is_opponent).map(|c| c.grp_id as i64).collect();
                 if record.player_deck_name.is_empty() || record.player_deck_name == "Selected Deck" {
                     if let Ok(Some(resolved_name)) = db_manager.resolve_deck_for_cards(&hero_gids, record.player_commander_id.map(|c| c as i64)).await {
