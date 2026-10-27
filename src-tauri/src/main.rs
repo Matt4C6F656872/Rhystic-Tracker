@@ -47,6 +47,7 @@ async fn run_tailer_supervisor(
     mut path_rx: tokio::sync::watch::Receiver<String>,
     db_manager: std::sync::Arc<DatabaseManager>,
     assembler_ref: std::sync::Arc<tokio::sync::Mutex<MatchAssembler>>,
+    app_handle: tauri::AppHandle,
 ) {
     loop {
         let path = PathBuf::from(path_rx.borrow().clone());
@@ -57,7 +58,12 @@ async fn run_tailer_supervisor(
         let stop_handle = tailer.stop_handle();
 
         let tailer_task = tokio::spawn(tailer.run());
-        let processing_task = tokio::spawn(process_tailer_events(rx, db_manager.clone(), assembler_ref.clone()));
+        let processing_task = tokio::spawn(process_tailer_events(
+            rx,
+            db_manager.clone(),
+            assembler_ref.clone(),
+            app_handle.clone(),
+        ));
 
         tokio::select! {
             _ = path_rx.changed() => {
@@ -654,6 +660,7 @@ async fn process_tailer_events(
     mut rx: mpsc::Receiver<TailerEvent>,
     db_manager: std::sync::Arc<DatabaseManager>,
     assembler_ref: std::sync::Arc<tokio::sync::Mutex<MatchAssembler>>,
+    app_handle: tauri::AppHandle,
 ) {
     let mut json_acc = JsonBlockAccumulator::new();
     let mut last_battle_pass_id: Option<String> = None;
@@ -661,9 +668,12 @@ async fn process_tailer_events(
     while let Some(event) = rx.recv().await {
         match event {
             TailerEvent::InitialCatchupComplete => {
-                let mut assembler = assembler_ref.lock().await;
-                assembler.is_live = true;
+                {
+                    let mut assembler = assembler_ref.lock().await;
+                    assembler.is_live = true;
+                }
                 println!("[PROCESSOR] Tailer caught up with log. Live match event processing active.");
+                let _ = app_handle.emit("deck-tracker-updated", ());
             }
             TailerEvent::Rotated => {
                 json_acc.reset();
@@ -694,8 +704,14 @@ async fn process_tailer_events(
                         }
                     }
                     if !matches!(parsed, ParsedEvent::Unknown) {
-                        let mut assembler = assembler_ref.lock().await;
-                        dispatch_parsed_event(parsed, &mut assembler, &db_manager).await;
+                        let is_live = {
+                            let mut assembler = assembler_ref.lock().await;
+                            dispatch_parsed_event(parsed, &mut assembler, &db_manager).await;
+                            assembler.is_live
+                        };
+                        if is_live {
+                            let _ = app_handle.emit("deck-tracker-updated", ());
+                        }
                     }
                 }
             }
@@ -735,6 +751,7 @@ fn main() {
             let (path_tx, path_rx) = tokio::sync::watch::channel(resolve_effective_log_path());
             app.manage(LogPathState { path_tx });
 
+            let tailer_app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let db_manager = match DatabaseManager::init().await {
                     Ok(d) => std::sync::Arc::new(d),
@@ -749,7 +766,7 @@ fn main() {
                     println!("[STARTUP] Backfilled {} historical deck achievement(s)", backfilled);
                 }
 
-                run_tailer_supervisor(path_rx, db_manager, assembler_ref).await;
+                run_tailer_supervisor(path_rx, db_manager, assembler_ref, tailer_app_handle).await;
             });
 
             // Background card database auto-sync on startup if cards_cache is empty
@@ -897,11 +914,13 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let settings = settings::load_settings();
-                if settings.minimize_to_tray {
-                    api.prevent_close();
-                    let _ = window.hide();
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    let settings = settings::load_settings();
+                    if settings.minimize_to_tray {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
                 }
             }
         })
@@ -937,6 +956,8 @@ fn main() {
             get_match_turn_events,
             get_impactful_cards,
             get_live_match_state,
+            toggle_deck_overlay,
+            set_deck_overlay_bounds,
             get_log_path,
             set_log_path,
             get_minimize_to_tray,

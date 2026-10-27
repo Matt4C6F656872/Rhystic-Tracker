@@ -25,6 +25,24 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
+/* Transparent root override for the frameless pop-out deck overlay window */
+html.overlay-window,
+html.overlay-window body,
+html.overlay-window #root {
+  background: transparent !important;
+  background-color: transparent !important;
+  overflow: hidden;
+}
+
+html.overlay-window ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+html.overlay-window ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* --- MTG Authentic Font Declarations -------------------------------------- */
 @font-face {
   font-family: 'Beleren';

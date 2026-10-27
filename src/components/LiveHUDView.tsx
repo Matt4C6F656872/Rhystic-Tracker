@@ -9,6 +9,7 @@ import { RoundTurnGroup } from './timeline/RoundTurnGroup';
 import { TurnActionRow } from './timeline/TurnActionRow';
 import { enrichActionsWithCombatContext } from './timeline/roundHighlightUtils';
 import { LiveDeckTrackerPanel } from './LiveDeckTrackerView';
+import { triggerToggleDeckOverlay } from './LiveDeckOverlayWindow';
 
 interface LiveHUDViewProps {
   palette?: any;
@@ -1036,6 +1037,16 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
                 ({liveMatchState.deck_tracker.total_library_cards}/{liveMatchState.deck_tracker.initial_library_cards})
               </span>
             )}
+          </button>
+
+          {/* Pop-Out In-Game Deck Overlay Button */}
+          <button
+            onClick={() => triggerToggleDeckOverlay()}
+            className="flex items-center gap-2 px-3 py-1 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/40 text-sky-300 hover:text-white text-xs font-sans font-bold uppercase tracking-wider transition-colors h-8 cursor-pointer"
+            title="Toggle frameless always-on-top In-Game Pop-Out Overlay window"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>Pop-Out Overlay</span>
           </button>
 
           {/* Close Match Button (appears when match is completed) */}

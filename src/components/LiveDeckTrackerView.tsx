@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Search, X, Swords } from 'lucide-react';
+import { Search, X, Swords, ExternalLink } from 'lucide-react';
 import { RenderManaCost } from '../utils/manaUtils';
 import { ManaPip } from './ManaPip';
 import { CardNameTooltip } from './CardNameTooltip';
 import CardImage from './CardImage';
+import { triggerToggleDeckOverlay } from './LiveDeckOverlayWindow';
 import logoImg from '../assets/RhysticTrackerLogo.svg';
 import symbolIcon from '../assets/RhysticTrackerICON.svg';
 
@@ -78,9 +79,6 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
       if (aDepleted !== bDepleted) return aDepleted - bDepleted;
       if (Math.abs(b.draw_probability - a.draw_probability) > 1e-6) {
         return b.draw_probability - a.draw_probability;
-      }
-      if (b.remaining_count !== a.remaining_count) {
-        return b.remaining_count - a.remaining_count;
       }
       if (a.cmc !== b.cmc) return a.cmc - b.cmc;
       return a.name.localeCompare(b.name);
@@ -466,6 +464,15 @@ export const LiveDeckTrackerView: React.FC<LiveDeckTrackerViewProps> = ({
               </span>
             </div>
           )}
+
+          <button
+            onClick={() => triggerToggleDeckOverlay()}
+            className="flex items-center gap-2 px-3 py-1 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/40 text-sky-300 hover:text-white text-xs font-sans font-bold uppercase tracking-wider transition-colors h-8 cursor-pointer"
+            title="Toggle frameless always-on-top In-Game Pop-Out Overlay window"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>Pop-Out Overlay</span>
+          </button>
         </div>
       </div>
 

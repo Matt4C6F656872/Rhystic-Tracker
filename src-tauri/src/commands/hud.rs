@@ -628,3 +628,93 @@ pub async fn get_live_match_state(state: tauri::State<'_, SharedMatchState>) -> 
         }))
     }
 }
+
+#[tauri::command]
+pub async fn toggle_deck_overlay(
+    app: tauri::AppHandle,
+    x: Option<f64>,
+    y: Option<f64>,
+    width: Option<f64>,
+    height: Option<f64>,
+) -> Result<bool, String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("deck-overlay") {
+        let visible = w.is_visible().unwrap_or(false);
+        if visible {
+            let _ = w.hide();
+            return Ok(false);
+        } else {
+            if let (Some(lx), Some(ly)) = (x, y) {
+                let _ = w.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(lx, ly)));
+            }
+            let _ = w.show();
+            let _ = w.set_always_on_top(true);
+            let _ = w.set_focus();
+            return Ok(true);
+        }
+    }
+
+    let init_w = width.unwrap_or(260.0).max(200.0);
+    let init_h = height.unwrap_or(440.0).max(220.0);
+
+    let mut builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        "deck-overlay",
+        tauri::WebviewUrl::App("index.html?window=deck-overlay".into()),
+    )
+    .title("Rhystic Deck Overlay")
+    .inner_size(init_w, init_h)
+    .min_inner_size(48.0, 48.0)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .shadow(false)
+    .resizable(true)
+    .skip_taskbar(true);
+
+    if let (Some(lx), Some(ly)) = (x, y) {
+        builder = builder.position(lx, ly);
+    }
+
+    let w = builder.build().map_err(|e| e.to_string())?;
+    let _ = w.set_always_on_top(true);
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn set_deck_overlay_bounds(
+    app: tauri::AppHandle,
+    width: f64,
+    height: f64,
+    resizable: bool,
+    x: Option<f64>,
+    y: Option<f64>,
+) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("deck-overlay") {
+        let saved_phys_pos = w.outer_position().ok();
+
+        if !resizable {
+            // Collapsing to 48x48 symbol mode:
+            // Linux/X11 Resize Order: lower min_size and resize the window BEFORE calling set_resizable(false)
+            // so X11/GTK window managers never block the size change.
+            let _ = w.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(48.0, 48.0))));
+            let _ = w.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
+            let _ = w.set_resizable(false);
+        } else {
+            // Expanding from 48x48 symbol mode:
+            // Linux/X11 Resize Order: call set_resizable(true) BEFORE resizing.
+            let _ = w.set_resizable(true);
+            let _ = w.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
+            let _ = w.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(200.0, 220.0))));
+        }
+
+        if let (Some(lx), Some(ly)) = (x, y) {
+            let _ = w.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(lx, ly)));
+        } else if let Some(pos) = saved_phys_pos {
+            let _ = w.set_position(tauri::Position::Physical(pos));
+        }
+        let _ = w.set_always_on_top(true);
+    }
+    Ok(())
+}

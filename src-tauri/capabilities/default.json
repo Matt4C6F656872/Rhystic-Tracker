@@ -1,10 +1,20 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capability for the main window",
-  "windows": ["main"],
+  "description": "Default capability for the main and deck-overlay windows",
+  "windows": ["main", "deck-overlay"],
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-size",
+    "core:window:allow-set-min-size",
+    "core:window:allow-set-resizable",
+    "core:window:allow-set-position",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-close",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
     "dialog:default",
     "dialog:allow-open"
   ]
