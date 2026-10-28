@@ -25,13 +25,21 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
-/* Transparent root override for the frameless pop-out deck overlay window */
+/* Stable background and rendering for the frameless pop-out deck overlay window */
 html.overlay-window,
 html.overlay-window body,
 html.overlay-window #root {
-  background: transparent !important;
-  background-color: transparent !important;
+  background: #0e0e12 !important;
+  background-color: #0e0e12 !important;
   overflow: hidden;
+}
+
+html.overlay-window * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  transition: none !important;
+  transform: none !important;
 }
 
 html.overlay-window ::-webkit-scrollbar {

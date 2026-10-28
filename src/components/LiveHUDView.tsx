@@ -1289,10 +1289,10 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
                 </div>
               </div>
 
-              {/* UNIFIED TIMELINE CONTAINER (Standardized bg-neutral-950/50, All Rounds Expanded by Default) */}
+              {/* UNIFIED TIMELINE CONTAINER (Standardized bg-neutral-950, All Rounds Expanded by Default) */}
               <div
                 ref={timelineRef}
-                className="flex-1 min-h-0 border border-white/10 bg-neutral-950/50 backdrop-blur-md p-3 overflow-y-auto custom-scrollbar flex flex-col space-y-2.5"
+                className="flex-1 min-h-0 border border-white/10 bg-neutral-950 p-3 overflow-y-auto custom-scrollbar flex flex-col space-y-2.5"
               >
                 {/* Opening Phase Row (if any) */}
                 {openingEvents.length > 0 && (
@@ -1351,6 +1351,8 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
                     isRoundCollapsed={collapsedRounds.has(r.round)}
                     onToggleRound={() => toggleRound(r.round)}
                     collapsedTurns={collapsedTurns}
+                    isFirstTurnCollapsed={collapsedTurns.has(r.firstTurn)}
+                    isSecondTurnCollapsed={collapsedTurns.has(r.secondTurn)}
                     onToggleTurn={toggleTurn}
                     density="compact"
                     searchTerm={search}

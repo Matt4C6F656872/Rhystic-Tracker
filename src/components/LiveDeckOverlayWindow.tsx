@@ -435,24 +435,21 @@ export const LiveDeckOverlayWindow: React.FC = () => {
         onPointerMove={handleSymbolPointerMove}
         onPointerUp={handleSymbolPointerUp}
         title="Click to expand Live Deck Overlay • Drag to reposition"
-        className={`w-[48px] h-[48px] rounded-full flex items-center justify-center cursor-pointer select-none relative overflow-hidden transition-colors ${
+        className={`w-[48px] h-[48px] rounded-full flex items-center justify-center cursor-pointer select-none relative overflow-hidden bg-[#0e0e12] ${
           isMatchActive
-            ? 'border-2 border-emerald-400/80 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
-            : 'border border-sky-400/50 shadow-[0_0_10px_rgba(56,189,248,0.25)]'
+            ? 'border-2 border-emerald-400'
+            : 'border border-sky-400'
         }`}
-        style={{
-          backgroundColor: `rgba(10, 11, 15, ${Math.max(0.75, opacity)})`,
-        }}
       >
         <img
           src={symbolIcon}
           alt="Rhystic Overlay"
           draggable={false}
-          className="w-7 h-7 object-contain pointer-events-none drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
+          className="w-7 h-7 object-contain pointer-events-none"
         />
         <span
           className={`absolute bottom-1 right-1 w-2 h-2 rounded-full pointer-events-none ${
-            isMatchActive ? 'bg-emerald-400 animate-pulse' : 'bg-sky-400/70'
+            isMatchActive ? 'bg-emerald-400' : 'bg-sky-400'
           }`}
         />
       </div>
@@ -462,11 +459,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
   // 2. EXPANDED OVERLAY MODE (~260x440 px default, user-resizable)
   return (
     <div
-      className="w-screen h-screen flex flex-col overflow-hidden select-none rounded-lg border border-white/20 text-white"
-      style={{
-        backgroundColor: `rgba(10, 11, 15, ${opacity})`,
-        backdropFilter: 'blur(10px)',
-      }}
+      className="w-screen h-screen flex flex-col overflow-hidden select-none border border-white/20 text-white bg-[#0e0e12]"
     >
       {/* DRAGGABLE HEADER */}
       <div
@@ -478,7 +471,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
           <img src={symbolIcon} alt="" className="w-4 h-4 object-contain shrink-0" />
           <span
             className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-              isMatchActive ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'
+              isMatchActive ? 'bg-emerald-400' : 'bg-neutral-500'
             }`}
           />
           <span className="text-[11px] font-display font-bold tracking-wider uppercase text-white truncate">
@@ -493,10 +486,10 @@ export const LiveDeckOverlayWindow: React.FC = () => {
         >
           <button
             onClick={() => setShowOpacitySlider((prev) => !prev)}
-            className={`p-1 rounded transition-colors cursor-pointer ${
+            className={`p-1 rounded cursor-pointer ${
               showOpacitySlider
                 ? 'bg-sky-500/25 text-sky-300'
-                : 'text-neutral-400 hover:text-white hover:bg-white/10'
+                : 'text-neutral-400'
             }`}
             title={`Overlay Opacity (${Math.round(opacity * 100)}%)`}
           >
@@ -505,7 +498,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
 
           <button
             onClick={handleCollapseToSymbol}
-            className="p-1 rounded text-neutral-400 hover:text-amber-300 hover:bg-white/10 transition-colors cursor-pointer"
+            className="p-1 rounded text-neutral-400 active:text-amber-300 cursor-pointer"
             title="Collapse to floating Rhystic symbol (48×48)"
           >
             <Minimize2 className="w-3 h-3" />
@@ -513,7 +506,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
 
           <button
             onClick={handleCloseOverlay}
-            className="p-1 rounded text-neutral-400 hover:text-rose-400 hover:bg-white/10 transition-colors cursor-pointer"
+            className="p-1 rounded text-neutral-400 active:text-rose-400 cursor-pointer"
             title="Close Pop-Out Overlay"
           >
             <X className="w-3.5 h-3.5" />
@@ -558,7 +551,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
           </div>
           <div className="w-full h-1 bg-white/10 mt-1 overflow-hidden">
             <div
-              className="h-full bg-amber-400 transition-all duration-300"
+              className="h-full bg-amber-400"
               style={{ width: `${Math.min(100, Math.max(0, landProb))}%` }}
             />
           </div>
@@ -577,7 +570,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
           </div>
           <div className="w-full h-1 bg-white/10 mt-1 overflow-hidden">
             <div
-              className="h-full bg-emerald-400 transition-all duration-300"
+              className="h-full bg-emerald-400"
               style={{ width: `${Math.min(100, Math.max(0, nonLandProb))}%` }}
             />
           </div>
@@ -589,10 +582,10 @@ export const LiveDeckOverlayWindow: React.FC = () => {
         <div className="flex items-center gap-1">
           <button
             onClick={() => handleSortModeChange('prob')}
-            className={`px-1.5 py-0.5 border transition-colors cursor-pointer font-bold ${
+            className={`px-1.5 py-0.5 border cursor-pointer font-bold ${
               sortMode === 'prob'
                 ? 'bg-sky-500/25 text-sky-300 border-sky-400/40'
-                : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
+                : 'bg-transparent text-neutral-400 border-transparent'
             }`}
             title="Sort by Next-Draw % (tie-broken by CMC, then Name)"
           >
@@ -600,10 +593,10 @@ export const LiveDeckOverlayWindow: React.FC = () => {
           </button>
           <button
             onClick={() => handleSortModeChange('cmc')}
-            className={`px-1.5 py-0.5 border transition-colors cursor-pointer font-bold ${
+            className={`px-1.5 py-0.5 border cursor-pointer font-bold ${
               sortMode === 'cmc'
                 ? 'bg-sky-500/25 text-sky-300 border-sky-400/40'
-                : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
+                : 'bg-transparent text-neutral-400 border-transparent'
             }`}
             title="Sort by Mana Value / CMC (tie-broken by Name)"
           >
@@ -611,10 +604,10 @@ export const LiveDeckOverlayWindow: React.FC = () => {
           </button>
           <button
             onClick={() => handleSortModeChange('name')}
-            className={`px-1.5 py-0.5 border transition-colors cursor-pointer font-bold ${
+            className={`px-1.5 py-0.5 border cursor-pointer font-bold ${
               sortMode === 'name'
                 ? 'bg-sky-500/25 text-sky-300 border-sky-400/40'
-                : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
+                : 'bg-transparent text-neutral-400 border-transparent'
             }`}
             title="Sort Alphabetically (A–Z)"
           >
@@ -624,10 +617,10 @@ export const LiveDeckOverlayWindow: React.FC = () => {
 
         <button
           onClick={toggleHideDepleted}
-          className={`flex items-center gap-1 px-1.5 py-0.5 border transition-colors cursor-pointer font-bold ${
+          className={`flex items-center gap-1 px-1.5 py-0.5 border cursor-pointer font-bold ${
             hideDepleted
               ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-              : 'bg-white/[0.04] text-neutral-400 border-white/10 hover:text-white'
+              : 'bg-white/[0.04] text-neutral-400 border-white/10'
           }`}
           title={hideDepleted ? 'Showing remaining cards only (click to dim 0x cards)' : 'Dimming 0x cards (click to hide 0x cards)'}
         >
@@ -664,14 +657,14 @@ export const LiveDeckOverlayWindow: React.FC = () => {
             return (
               <div
                 key={card.grp_id}
-                className={`relative flex items-center justify-between gap-1.5 px-2 h-6 transition-opacity overflow-hidden ${
-                  isDepleted ? 'opacity-35 grayscale bg-black/30' : 'hover:bg-white/[0.06]'
+                className={`relative flex items-center justify-between gap-1.5 px-2 h-6 overflow-hidden ${
+                  isDepleted ? 'opacity-35 grayscale bg-black/30' : 'bg-transparent'
                 }`}
               >
                 {/* Subtle probability fill bar */}
                 {!isDepleted && card.draw_probability > 0 && (
                   <div
-                    className={`absolute inset-y-0 left-0 pointer-events-none transition-all duration-300 ${
+                    className={`absolute inset-y-0 left-0 pointer-events-none ${
                       card.is_land ? 'bg-amber-500/[0.09]' : 'bg-sky-500/[0.09]'
                     }`}
                     style={{ width: `${barWidth}%` }}

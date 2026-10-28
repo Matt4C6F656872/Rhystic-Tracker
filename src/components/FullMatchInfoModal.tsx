@@ -309,7 +309,7 @@ export function FullMatchInfoModal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-3 sm:p-5 bg-black/95 backdrop-blur-2xl animate-fade-in select-none"
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-3 sm:p-5 bg-black/95 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -395,7 +395,7 @@ export function FullMatchInfoModal({
 
           <div className="flex-1 overflow-hidden grid grid-cols-12 min-h-0 relative z-10">
             {/* Column 1: Left Floating Match Specs Sidebar (Col-Span 3) */}
-            <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 min-h-0 h-full overflow-y-auto custom-scrollbar p-4 sm:p-5 border-r border-white/10 bg-neutral-950/70 backdrop-blur-md">
+            <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 min-h-0 h-full overflow-y-auto custom-scrollbar p-4 sm:p-5 border-r border-white/10 bg-neutral-950">
               {/* Brawl / Standard Brawl Commander Cards (Floating) */}
               {selectedMatch?.format_name && selectedMatch.format_name.toLowerCase().includes('brawl') && (
                 <div className="space-y-2 shrink-0 border-b border-white/10 pb-3.5">

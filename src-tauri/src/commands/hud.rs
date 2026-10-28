@@ -657,6 +657,13 @@ pub async fn toggle_deck_overlay(
     let init_w = width.unwrap_or(260.0).max(200.0);
     let init_h = height.unwrap_or(440.0).max(220.0);
 
+    // On Linux under WEBKIT_DISABLE_COMPOSITING_MODE=1, WebKitGTK with transparent(true)
+    // disables GPU compositing and Cairo software rasterizer erases dirty rects to transparent.
+    // Use transparent(false) on Linux when WEBKIT_DISABLE_COMPOSITING_MODE=1 is set.
+    let is_linux_no_compositing = cfg!(target_os = "linux")
+        && std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").map(|v| v == "1").unwrap_or(false);
+    let use_transparency = !is_linux_no_compositing;
+
     let mut builder = tauri::WebviewWindowBuilder::new(
         &app,
         "deck-overlay",
@@ -666,7 +673,7 @@ pub async fn toggle_deck_overlay(
     .inner_size(init_w, init_h)
     .min_inner_size(48.0, 48.0)
     .decorations(false)
-    .transparent(true)
+    .transparent(use_transparency)
     .always_on_top(true)
     .shadow(false)
     .resizable(true)
