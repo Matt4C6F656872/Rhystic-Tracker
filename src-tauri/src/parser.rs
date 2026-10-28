@@ -126,6 +126,7 @@ pub enum ParsedEvent {
     Auth { screen_name: String, client_id: String },
     MatchCreated { match_id: String, format_name: String, assigned_deck_event: bool, reserved_players: serde_json::Value },
     DeckSubmitted { deck_name: String, total_cards: usize, main_deck: Vec<u32>, commander_id: Option<u32>, deck_id: Option<String> },
+    ConnectDeck { deck_cards: Vec<u32>, commander_cards: Vec<u32>, system_seat_ids: Vec<u32> },
     DeckCatalogBatch { decks: Vec<(String, String, Option<u32>, Vec<u32>)> },
     ConnectResp {
         system_seat_id: Option<u32>,
@@ -361,12 +362,52 @@ pub fn parse_line(line: &str) -> ParsedEvent {
         }
     }
 
-    // Ingress and process real-time GreToClientEvent messages (ConnectResp, GameStateMessages, zone transitions, board states, turn changes)
-    if line.contains("GREMessageType_GameStateMessage")
-        || line.contains("GREMessageType_PromptReq")
-        || line.contains("GREMessageType_ConnectResp")
-        || line.contains("connectResp")
-    {
+    // Ingress starting deck from ConnectResp (authoritative deck list for all formats: Draft, Sealed, Jump In, Constructed)
+    if line.contains("GREMessageType_ConnectResp") {
+        if let Some(start) = line.find('{') {
+            let json_str = &line[start..];
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(json_str) {
+                let messages = v.get("greToClientEvent")
+                    .and_then(|e| e.get("greToClientMessages"))
+                    .and_then(|m| m.as_array());
+
+                if let Some(msgs) = messages {
+                    for msg in msgs {
+                        if msg.get("type").and_then(|t| t.as_str()) == Some("GREMessageType_ConnectResp") {
+                            let system_seat_ids: Vec<u32> = msg.get("systemSeatIds")
+                                .and_then(|s| s.as_array())
+                                .map(|arr| arr.iter().filter_map(|x| x.as_u64().map(|v| v as u32)).collect())
+                                .unwrap_or_default();
+
+                            if let Some(cr) = msg.get("connectResp") {
+                                if let Some(dm) = cr.get("deckMessage") {
+                                    let deck_cards: Vec<u32> = dm.get("deckCards")
+                                        .and_then(|arr| arr.as_array())
+                                        .map(|arr| arr.iter().filter_map(|x| x.as_u64().map(|v| v as u32)).collect())
+                                        .unwrap_or_default();
+                                    let commander_cards: Vec<u32> = dm.get("commanderCards")
+                                        .and_then(|arr| arr.as_array())
+                                        .map(|arr| arr.iter().filter_map(|x| x.as_u64().map(|v| v as u32)).collect())
+                                        .unwrap_or_default();
+
+                                    if !deck_cards.is_empty() {
+                                        return ParsedEvent::ConnectDeck {
+                                            deck_cards,
+                                            commander_cards,
+                                            system_seat_ids,
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Ingress and process real-time GameStateMessages (zone transitions, board states, turn changes)
+    if line.contains("GREMessageType_GameStateMessage") || line.contains("GREMessageType_PromptReq") {
         if let Some(start) = line.find('{') {
             let json_str = &line[start..];
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json_str) {
@@ -549,6 +590,7 @@ pub fn parse_line(line: &str) -> ParsedEvent {
                                         }
                                     }
                                 }
+
 
                                 let turn_info = gsm.get("turnInfo");
                                 let turn_number = turn_info.and_then(|t| t.get("turnNumber")).and_then(|n| n.as_u64()).unwrap_or(0) as u32;
@@ -1444,6 +1486,12 @@ pub fn normalize_format(raw_event_id: &str) -> String {
         "Color Challenge".to_string()
     } else if s.contains("gladiator") {
         "Gladiator".to_string()
+    } else if s.contains("dualcolorprecon")
+        || s.contains("dualcolor")
+        || s.contains("starterdeckduels")
+        || s.contains("starterdeck")
+    {
+        "Starter Deck Duels".to_string()
     } else if s.contains("commander") && !s.contains("brawl") {
         if s.contains("ranked") || s.contains("competitive") || s.contains("ladder") {
             "Commander - Competitive".to_string()
@@ -1525,6 +1573,9 @@ pub fn normalize_format(raw_event_id: &str) -> String {
 pub fn is_assigned_deck_event(raw_event_id: &str) -> bool {
     let lower = raw_event_id.to_lowercase();
     lower.contains("welcomedeckduels")
+        || lower.contains("dualcolor")
+        || lower.contains("starterdeck")
+        || lower.contains("precon")
         || lower.contains("jump_in")
         || lower.contains("jumpin")
         || lower.contains("momir")
@@ -1599,6 +1650,9 @@ mod tests {
         assert_eq!(normalize_format("AIBotMatch_Rebalanced"), "Bot Match");
         assert_eq!(normalize_format("DirectGame_Challenge"), "Direct Challenge");
         assert_eq!(normalize_format("Gladiator_Play"), "Gladiator");
+        assert_eq!(normalize_format("DUALCOLORPRECONS"), "Starter Deck Duels");
+        assert_eq!(normalize_format("DualColorPrecons"), "Starter Deck Duels");
+        assert_eq!(normalize_format("StarterDeckDuels"), "Starter Deck Duels");
     }
 
     #[test]
@@ -1608,6 +1662,9 @@ mod tests {
         assert!(is_assigned_deck_event("Jump_In_2024"));
         assert!(is_assigned_deck_event("MWM_Momir_20260908"));
         assert!(is_assigned_deck_event("MWM_Omniscience_Dragons"));
+        assert!(is_assigned_deck_event("DUALCOLORPRECONS"));
+        assert!(is_assigned_deck_event("DualColorPrecons"));
+        assert!(is_assigned_deck_event("StarterDeckDuels"));
         // Casing must not matter on either side.
         assert!(is_assigned_deck_event("welcomedeckduels_hob_20260811"));
         assert!(is_assigned_deck_event("JUMP_IN_2024"));

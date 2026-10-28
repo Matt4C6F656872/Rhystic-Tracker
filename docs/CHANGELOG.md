@@ -9,6 +9,26 @@ See the root [`CHANGELOG.md`](../CHANGELOG.md) for full v2.0.0 release notes cov
 - **Core Engine, Reliability & Security Fixes**: Single-flight SQLite initialization (`DB_SINGLETON`), removal of destructive startup queries, Best-of-3 multi-game state isolation and turn accumulation, string-aware JSON log accumulator with log rotation reset and 2 MB safety cap, out-of-order `MatchCompleted` ID verification, N+1 SQLite query elimination, and scoped cloud sync lookups.
 - **Attribution**: Crediting original author [**Balthazzahr**](https://github.com/Balthazzahr) under the [MIT License](../LICENSE) and fork maintainer [**@Matt4C6F656872**](https://github.com/Matt4C6F656872).
 
+## [1.8.0] - 2026-10-28 — 🎴 Live Deck Tracker Pop-Up Window & Dynamic Odds Telemetry
+
+### 🎴 Live Deck Tracker Pop-Up Window
+- **Standalone Always-On-Top Pop-Out**: Introduced a dedicated floating overlay window for real-time deck tracking during MTGA matches (`/overlay/deck-tracker`), built for both multi-monitor setups and compact single-screen overlays.
+- **Auto-Open on Match Start**: Added an automated launch toggle in **Settings → General & Behavior** (`autoOpenDeckTracker`) that summons the deck tracker window the moment an active match begins.
+- **Smart Window Position Memory**: Window position is persistently remembered across game restarts, match completions, and system reboots both locally and in backend configuration (`save_deck_tracker_position`).
+- **Post-Match Standby Screen**: Displays quick match victory/defeat animations before transitioning to a clean standby screen with centered Rhystic Tracker branding, a neat border frame, and a dedicated close button.
+
+### 📊 Real-Time Draw Odds & Probability Telemetry
+- **Dynamic 3-Way Probability Bar**: Live hypergeometric probability telemetry banner calculating odds for your immediate next draw:
+  - **Lands** (`ms ms-land`, emerald green banner) with remaining pool count.
+  - **Creatures** (`ms ms-creature`, amber banner) with remaining count.
+  - **Spells** (`ms ms-instant`, non-creature spells banner covering instants, sorceries, artifacts, enchantments, planeswalkers, and battles).
+- **Dedicated Brawl Commander Section**: Pinned Command Zone section at the top of the card roster for Brawl matches, displaying commander tax and command zone status. Automatically hides during non-Brawl formats.
+- **Foldable Zones with Persistent State**: Collapsible accordion headers for **Cards in Hand**, **Cards on Battlefield**, and **Graveyard & Exile** cards. Collapsed/expanded states are saved permanently in local storage across games.
+- **Flexible Sorting**: Added persistence for card sorting by Draw Chance (`%`), Mana Cost (`Mana`), or Name (`Name`).
+
+### 🚀 What's New Splash Modal
+- **One-Time Feature Announcement**: Added a streamlined v1.8.0 onboarding splash modal informing users about the new pop-up deck tracker with direct buttons to explore the overlay or configure its settings.
+
 ## [1.7.8] - 2026-10-08 — 📦 Graphical Booster Pack Fanning, Economy Widget Alignment & Dashboard Persistence
 
 ### 📦 Graphical Booster Packs & Inventory Alignment

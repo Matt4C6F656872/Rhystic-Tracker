@@ -8,8 +8,8 @@ import symbolIcon from '../assets/RhysticTrackerICON.svg';
 import { RoundTurnGroup } from './timeline/RoundTurnGroup';
 import { TurnActionRow } from './timeline/TurnActionRow';
 import { enrichActionsWithCombatContext } from './timeline/roundHighlightUtils';
-import { LiveDeckTrackerPanel } from './LiveDeckTrackerView';
-import { triggerToggleDeckOverlay } from './LiveDeckOverlayWindow';
+import { LiveDeckTrackerPanel } from './deck_tracker/LiveDeckTrackerPanel';
+import { invoke } from '@tauri-apps/api/core';
 
 interface LiveHUDViewProps {
   palette?: any;
@@ -63,18 +63,6 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
 
   // Search input state
   const [search, setSearch] = useState<string>('');
-
-  // Toggleable Deck Tracker split-panel state
-  const [showDeckTrackerSplit, setShowDeckTrackerSplit] = useState<boolean>(() => {
-    return localStorage.getItem('liveHudDeckSplit') === 'true';
-  });
-  const toggleDeckTrackerSplit = () => {
-    setShowDeckTrackerSplit((prev) => {
-      const next = !prev;
-      localStorage.setItem('liveHudDeckSplit', String(next));
-      return next;
-    });
-  };
 
   // Result banner dismiss state
   const [dismissedResultMatchId, setDismissedResultMatchId] = useState<string | null>(null);
@@ -1020,33 +1008,14 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
             </div>
           )}
 
-          {/* Toggleable Live Deck Tracker Split-Panel Button */}
-          <button
-            onClick={toggleDeckTrackerSplit}
-            className={`flex items-center gap-2 px-3 py-1 border text-xs font-sans font-bold uppercase tracking-wider transition-colors h-8 cursor-pointer ${
-              showDeckTrackerSplit
-                ? 'bg-sky-500/20 border-sky-400/50 text-sky-300'
-                : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-neutral-300 hover:text-white'
-            }`}
-            title="Toggle Live Deck Tracker split-panel"
-          >
-            <span className="ms ms-ability-surveil text-xs" />
-            <span>Deck Tracker</span>
-            {liveMatchState?.deck_tracker?.has_deck && (
-              <span className="font-mono text-[11px] text-white/90">
-                ({liveMatchState.deck_tracker.total_library_cards}/{liveMatchState.deck_tracker.initial_library_cards})
-              </span>
-            )}
-          </button>
-
           {/* Pop-Out In-Game Deck Overlay Button */}
           <button
-            onClick={() => triggerToggleDeckOverlay()}
+            onClick={() => invoke('open_deck_tracker_window').catch(console.error)}
             className="flex items-center gap-2 px-3 py-1 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/40 text-sky-300 hover:text-white text-xs font-sans font-bold uppercase tracking-wider transition-colors h-8 cursor-pointer"
-            title="Toggle frameless always-on-top In-Game Pop-Out Overlay window"
+            title="Open frameless always-on-top Live Deck Tracker window"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span>Pop-Out Overlay</span>
+            <span>Deck Tracker</span>
           </button>
 
           {/* Close Match Button (appears when match is completed) */}
@@ -1276,9 +1245,22 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
 
 
 
-          {/* TIMELINE + OPTIONAL LIVE DECK TRACKER SPLIT PANEL */}
-          <div className="flex-1 min-h-0 flex gap-3 overflow-hidden">
-            <div className="flex-1 min-w-0 min-h-0 flex flex-col space-y-1.5 overflow-hidden">
+          {/* MAIN TIMELINE & SIDEBAR ROW */}
+          <div className="flex-1 min-h-0 flex gap-2 overflow-hidden relative">
+            {/* Left-hand Docked Deck Tracker Rail */}
+            <LiveDeckTrackerPanel
+              trackerData={liveMatchState?.deck_tracker || null}
+              turn={liveMatchState?.turn || 1}
+              deckName={liveMatchState?.player_deck_name || 'Active Deck'}
+              formatName={liveMatchState?.format}
+              isOverlay={false}
+              onPopOut={() => {
+                invoke('open_deck_tracker_window').catch(console.error);
+              }}
+            />
+
+            {/* TIMELINE COLUMN WITH HEADER LABELS DIRECTLY ABOVE IT */}
+            <div className="flex-1 min-h-0 flex flex-col space-y-1 overflow-hidden">
               {/* Top Timeline Column Labels (Left = Opponent, Right = You) */}
               <div className="flex items-center justify-between px-3.5 pt-0.5 shrink-0">
                 <div className={`text-[11px] font-sans font-black tracking-[0.15em] uppercase ${leftColorClass} pl-1`}>
@@ -1367,20 +1349,6 @@ export const LiveHUDView: React.FC<LiveHUDViewProps> = ({
                 )}
               </div>
             </div>
-
-            {showDeckTrackerSplit && (
-              <div className="w-[390px] xl:w-[430px] shrink-0 min-h-0 flex flex-col overflow-hidden">
-                <LiveDeckTrackerPanel
-                  deckTracker={liveMatchState?.deck_tracker}
-                  deckName={liveMatchState?.player_deck_name}
-                  format={liveMatchState?.format}
-                  palette={palette}
-                  compact={true}
-                  searchQuery={search}
-                  onShowCard={onShowCard}
-                />
-              </div>
-            )}
           </div>
 
           {/* BOTTOM ROW: LAST THREE ACTIONS TICKER */}
