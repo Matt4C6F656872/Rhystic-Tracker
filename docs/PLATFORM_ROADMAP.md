@@ -74,92 +74,68 @@ Because players tweak 3–10 flex slots even in established meta decks, Rhystic 
 4. **Layer 4 — Limited Analytics (`Draft` & `Sealed` — 17Lands Methodology):**
    - Groups Limited decks by **Format + Color Pair (`WU`, `BR`, `GWr`)** and evaluates cards via **GP WR** (Maindeck Win Rate), **Seen WR** (Game-in-Hand / Cast Win Rate), and **IWD** (Improvement When Drawn).
 
----
+## 4. Repository Strategy: Upstream Tracking & `+web` Edition Architecture
 
-## 4. Implementation Roadmap
+To avoid duplicating desktop UI work while maintaining a full-featured telemetry and self-hostable server platform, development follows a two-repository model:
 
-```mermaid
-flowchart TD
-    A["Phase 1: Client UX Polish"] --> B["Phase 2: Live View & Achievement Activation"]
-    B --> C["Phase 3: Client Sync Engine"]
-    C --> D["Phase 4: Backend Ingestion Service & API"]
-    D --> D2["Phase 4.5: Granular Tiers, Archetype Clustering & Player Leaderboards"]
-    D2 --> E["Phase 5: Web Companion & Community Portal"]
-```
-
-### Phase 1: Client UX Polish (Completed)
-- [x] Upgrade the Auto-Switch on Match Start setting to a multi-option selector in `GeneralTab.tsx`, `SettingsView.tsx`, and `App.tsx`:
-  - `Off`
-  - `Live Match HUD`
-  - `Live Deck Tracker`
-- [x] Allow `live-deck` as a startup tab option in settings.
-
-### Phase 2: Live View, Commander Format Support & Deck Achievement Activation (Completed)
-- [x] Activate the shelved deck achievements in [`deck_achievements.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/deck_achievements.rs) and [`main.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/main.rs), with starting-life-relative scaling for 20-life, 25-life Brawl, and 40-life Commander formats, plus automatic startup backfill from match history.
-- [x] Wire the **Card Trophies | Deck Honors** category switcher and interactive deck honors grid into [`AchievementsView.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/AchievementsView.tsx).
-- [x] Promote `Commander` and `Commander - Competitive` to first-class formats in [`parser.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/parser.rs), [`App.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/App.tsx), and [`FormatDistributionWidget.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/dashboard/widgets/FormatDistributionWidget.tsx).
-- [x] Persist the embedded Deck Tracker split-panel toggle (`liveHudDeckSplit`) inside [`LiveHUDView.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/LiveHUDView.tsx).
-
-### Phase 3: Client Sync Engine (`src-tauri/src/sync.rs`) (Completed)
-- [x] Create an opt-in settings panel under [`ConnectionTab.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/settings/ConnectionTab.tsx) (`SettingsView -> MTGA Connection / Community Sync`).
-- [x] Design the anonymized match payload schema (`AnonymizedMatchPayload`: format, turn count, starting/ending/min life, commander & companion `grp_id`s, seen card `grp_id`s, and micro-combat stats with zero personal names or raw match IDs) in [`sync.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/sync.rs).
-- [x] Build an asynchronous local outbox queue in SQLite (`sync_outbox` in [`db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/db.rs)) wired to `MatchCompleted` and historical backfill via [`system.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/commands/system.rs).
-
-### Phase 4: Server Ingestion & Analytical Database (`server/`) (Completed)
-- [x] Develop a lightweight Rust (`axum`) ingestion API in [`server/src/lib.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/lib.rs) and [`server/src/main.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/main.rs), plus the HTTP outbox dispatcher (`flush_outbox_batch`) in [`src-tauri/src/sync.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/sync.rs).
-- [x] Setup the analytical storage layer in [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs) (`ingested_matches`, `ingested_match_cards`, `ingested_impactful_cards` with idempotent `match_hash` deduplication and composite indexes) covering all MTGA Constructed, Commander/Brawl, and Limited formats (excluding Alchemy).
-- [x] Implement public REST endpoints for format meta (`/api/v1/meta/formats`), Commander & Brawl tier lists + Salt Index (`/api/v1/meta/commanders`), card seen win rates & micro-combat stats (`/api/v1/meta/cards`), and head-to-head Commander matchups (`/api/v1/meta/matchups`).
-
-### Phase 4.5: Granular Data-Sharing Tiers, Archetype Clustering & Global Leaderboards (Completed)
-- [x] Expand `SyncConfig` and [`ConnectionTab.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/settings/ConnectionTab.tsx) with granular opt-in checkboxes (`include_deck_cards`, `share_full_decklist`, and `share_player_identity` using a read-only log-detected MTG Arena handle from `AuthenticateResponse` stripped of `#12345` + `arena_account_hash`).
-- [x] Add `deck_hash` (collapsing basic land printings), `archetype_hash`, `color_identity`, `deck_cards` (maindeck `grp_id` quantities), card names, and optional claimed `player_handle` + `player_rank` to `AnonymizedMatchPayload` in [`src-tauri/src/sync.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/sync.rs) and [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs).
-- [x] Implement server-side **First-Seen Handle Pinning (`claimed_handles`)** in [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs) binding each handle and `player_account_hash` to the SHA-256 digest of the owner's secret `contributor_id` token, plus cross-device token copy/restore in [`ConnectionTab.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/settings/ConnectionTab.tsx).
-- [x] Implement Archetype & Core/Flex-Slot clustering (`GET /api/v1/meta/decks`) and Global Claimed Player / Hall of Fame Leaderboards (`GET /api/v1/leaderboards`) in [`server/src/lib.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/lib.rs).
-
-### Phase 5: Web Companion & Community Portal (`server/src/portal.rs`) (Completed)
-- [x] Build a responsive Web Companion & Community Portal served at `GET /` in [`server/src/portal.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/portal.rs) matching the local Rhystic Tracker dark glassmorphic aesthetic, featuring the **Unified Archetype & Core + Flex-Slot Explorer** (side-by-side Core $\ge 70\%$ vs. Flex $< 70\%$ Win-Rate Delta table and in-place Variant Switcher), All-Format Matrix, Commander & Brawl Tier Lists + Salt Index, Card Performance with Scryfall hover previews, and Global Claimed Player Leaderboards.
+1. **Upstream Sync & PR Repository (`Matt4C6F656872/Rhystic-Tracker`):**
+   - Tracks `Balthazzahr/Rhystic-Tracker` (`upstream/main`) directly.
+   - Used to package and submit core engine bug fixes, SQLite optimizations, Bo3 state fixes, and Linux/WebKitGTK rendering improvements as clean Pull Requests to upstream.
+2. **Telemetry & Server Distribution (`Matt4C6F656872/Rhystic-Tracker-Web`):**
+   - Releases follow the **`v<upstream_version>+web.<revision>`** naming scheme (e.g., `v1.8.0+web.1`).
+   - Merges every official upstream release tag and layers the standalone `server/`, `src-tauri/src/sync.rs` outbox, and client telemetry views on top via minimal hook points.
 
 ---
 
-## 5. Security & Next-Generation Technical Roadmap (Phase 6+)
+## 5. Implementation Roadmap
 
-### A. Two-Layer Arena Handle Security Model (Threat Model, Pinning & Dispute Recovery)
-Because MTG Arena does not provide a public OAuth2 provider and writes `Player.log` as unencrypted plaintext on the user's local filesystem, any local-log-only check can theoretically be tampered with by a user who edits their own `Player.log`. Rhystic Cloud addresses this with a **2-Layer Handle Security Model**:
+### Phases 1 – 5: Core Telemetry, Sync Outbox, Handle Pinning & Web Portal (Completed)
+- [x] **Phase 1–2:** Auto-Switch on Match Start, Commander/Brawl format promotion, and scaled Deck Honors activation (`deck_achievements.rs`).
+- [x] **Phase 3:** Opt-in SQLite `sync_outbox` queue and `AnonymizedMatchPayload` dispatcher (`src-tauri/src/sync.rs`).
+- [x] **Phase 4–4.5:** Rust `axum` ingestion server (`server/`), 3-tier privacy controls (`ConnectionTab.tsx`), First-Seen Handle Pinning (`claimed_handles`), and 4-layer Archetype + Core/Flex clustering.
+- [x] **Phase 5:** Responsive Web Companion & Community Portal (`server/src/portal.rs`).
 
-1. **Layer 1 — Server-Side First-Seen Token Pinning (`claimed_handles` — Implemented):**
-   - When a handle (`display_handle` / `player_account_hash`) is synced for the first time, [`server/src/db.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/server/src/db.rs) records a binding between the normalized handle, `player_account_hash`, and `SHA-256("rhystic-handle-claim-v1:" || contributor_id)` in the `claimed_handles` table.
-   - If another user sees a streamer's `screenName#12345` or `clientId` on stream and edits their local `Player.log` to match it, their client does not possess the original owner's secret `contributor_id` UUID. The server cleanly strips the spoofed handle attribution while still accepting the anonymous match telemetry.
-   - **Cross-Device & OS Reinstall Recovery:** Users can copy and restore their secret `contributor_id` token directly in [`ConnectionTab.tsx`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src/components/settings/ConnectionTab.tsx) (`Settings -> Connections & Cloud Sync`) or back up `sync_settings.json` so they never lock themselves out of their claimed handle when switching PCs.
-2. **Layer 2 — Handle Squatting Dispute & Reclaim Protocol (Planned Phase 6):**
-   - *The Edge Case:* A malicious user could attempt to pre-emptively squat a famous streamer's handle before that streamer installs Rhystic Tracker.
-   - *Why Local-Log Challenges Alone Are Insufficient:* Any challenge that relies solely on reading local `Player.log` text (such as naming a local deck a specific nonce) can also be forged by editing `Player.log`.
-   - *Sanctioned Reclaim Mechanisms:*
-     - **Verified Direct-Challenge Match Proof:** The claimant plays a 1-turn Direct Challenge against an official RhysticVerifier bot/admin account in MTG Arena; the verifier's own trusted client observes the opponent's full `screenName#12345` and `clientId` directly from the WotC game server and re-binds `claimed_handles.owner_token_hash` to the rightful owner's `contributor_id`.
-     - **Social / Streamer Verification Badge:** Optional Twitch / YouTube / Discord OAuth link on the Community Portal for recognized creators and tournament competitors, granting a distinct `Verified Creator` badge separate from standard `Log-Detected / Claimed` handles.
+---
 
-### B. Relational Best-of-3 (`match_games`) Tracking (Planned Phase 6)
-Currently, Best-of-3 (Traditional) matches store a single row in `matches` where `turns` is accumulated across completed games (`completed_games_turns + current_game_turns` in [`match_assembler.rs`](file:///home/matt/Code/Rhystic-Tracker-1.7.8/src-tauri/src/match_assembler.rs)). While this prevents Game 3 early concessions from misreporting a 30-turn Bo3 series as a 2-turn match, it conflates multi-game series duration with single-game clock speed (`Gotta Go Fast`, `Marathon Master`, and format `avg_turns`).
+### Phase 6: Upstream `v1.8.0` Reconciliation & Core Bugfix PRs (Next Up)
+- [ ] **Reconcile Upstream `v1.8.0` into `Rhystic-Tracker-Web` (`v1.8.0+web.1`):**
+  - Merge upstream `v1.8.0` (`/overlay/deck-tracker`, 3-way Land/Creature/Spell draw odds, Brawl Command Zone pin, and `autoOpenDeckTracker` setting).
+  - Port our Linux `WEBKIT_DISABLE_COMPOSITING_MODE=1` solid-backing fix, hover transition stripping, and `48×48` floating symbol collapse mode onto the unified overlay.
+- [ ] **Submit Core Engine & Linux Hardening PRs to Upstream (`Balthazzahr/Rhystic-Tracker`):**
+  - **PR 1 (Engine & SQLite Stability):** `DB_SINGLETON` race condition fix (`db.rs`), string-aware `Player.log` JSON brace scanner + 2 MB buffer cap (`main.rs`), Bo3 per-game state isolation, and out-of-order `MatchCompleted` ID verification (`match_assembler.rs`).
+  - **PR 2 (Linux WebKitGTK & Query Performance):** Batched SQLite card metadata lookups (`matches.rs`), `React.memo` timeline turn blocks + `CardImage` state guard (`MatchTimeline.tsx`, `RoundTurnGroup.tsx`, `CardImage.tsx`), and `scripts/install-linux.sh`.
+- [ ] **Full Program & Settings Inventory (`docs/PROGRAM_INVENTORY.md`):**
+  - Generate a complete reference audit of all current UI tabs, Bento widgets, SQL queries, achievements, leaderboards, settings keys, and `Player.log` parsers.
 
-- **Parent `matches` Table (Series-Level):**
-  - Stores `match_id`, `format`, `series_result` (`Win`/`Loss`), `games_won`, `games_lost`, `total_duration_seconds`, `total_turns`, `hero_deck_name`, `opponent_name`, and `timestamp`.
-- **Child `match_games` Table (Per-Game Level):**
-  - `match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE`
-  - `game_number INTEGER NOT NULL` (`1`, `2`, `3`)
-  - `on_the_play INTEGER NOT NULL` (per-game Play/Draw tracking, since Play/Draw alternates in Games 2 & 3)
-  - `hero_mulligans INTEGER NOT NULL`, `opponent_mulligans INTEGER NOT NULL`
-  - `turns INTEGER NOT NULL`, `duration_seconds INTEGER NOT NULL`
-  - `result TEXT NOT NULL`, `result_reason TEXT`
-  - `hero_starting_life INTEGER`, `hero_end_life INTEGER`, `hero_min_life INTEGER`, `opponent_end_life INTEGER`
-  - `sideboard_in_json TEXT`, `sideboard_out_json TEXT` (cards boarded in/out prior to Game 2 and Game 3)
-  - `PRIMARY KEY (match_id, game_number)`
-- **Analytical Benefits:**
-  - Accurate per-game Play vs. Draw win rates in Traditional (Bo3) Constructed and Traditional Draft.
-  - True per-game turn clocks for `Gotta Go Fast` ($\le 4$ turns in a single game) and `Marathon Master` ($\ge 20$ turns in a single game).
-  - Post-sideboard win-rate deltas (Game 1 WR vs. Games 2–3 post-board WR).
+---
 
-### C. Standalone Server Packaging & Multi-OS Release Automation (Scheduled for v2.1.0)
-- **Standalone Community Server Packaging:** Containerized Docker/OCI image (`Dockerfile` + `docker-compose.yml`) and `systemd` service unit for one-command deployment of `rhystic-cloud-server`.
-- **GitHub Actions Multi-OS Release Pipeline:** Automated release workflows building and publishing signed Linux (`.deb`, `.rpm`, `.tar.gz`), macOS Universal (`.dmg`), Windows (`.exe` / `.msi`), and standalone server binaries on every version tag.
+### Phase 7: Limited / Draft Analytics & Economy Grind Calculator (Client + Server)
+- [ ] **`Player.log` Event & Draft Course Parser (`parser.rs` & `match_assembler.rs`):**
+  - Parse `Course` / `Courses` blocks (`CourseId`, `InternalEventName`, `WinLossGate`, `CurrentWins`, `CurrentLosses`, `MaxWins`, `MaxLosses`, `ProcessedMatchIds`, `CourseDeck`).
+  - Automatically extract **Event Type** (`PremierDraft`, `QuickDraft`, `TradDraft`, `Sealed`, `Constructed_Event`) and **3-Letter Set Code** (e.g., `FRA`, `FDN`, `DSK`).
+- [ ] **Trophy & Run Tracking (`event_runs` Table + Historical Backfill):**
+  - Flag runs reaching `CurrentWins >= MaxWins` (`7-x` Bo1 or `3-0` Bo3) as **Trophies (`is_trophy = true`)**.
+  - Reconstruct historical draft runs and trophies on startup from existing Limited matches in `rhystic.db`.
+  - Display live event record badges (`5-1` / `7-2 Trophy`) in the Live HUD and Deck Overlay.
+- [ ] **Draft Economy Sustainability & "Days to Grind" Calculator:**
+  - Calculate net Gem/Gold cost per draft by comparing event entry fees (`1,500 Gems` / `10,000 Gold` Premier; `750 Gems` / `5,000 Gold` Quick) against MTGA's exact win-payout table for the player's average win rate per set/type.
+  - Combine with the player's logged daily Gold income (Daily Quests + daily win rewards, or a `1,150 Gold/day` baseline) to display **"Days of Grinding per Draft"** when net Gem/Gold delta is negative.
 
+---
 
+### Phase 8: Achievements, Personal Records & Community Leaderboards Rethink
+- [ ] **Client vs. Server Scope Separation:**
+  - **Local Client ("Personal Hall of Fame"):** Reframe local card leaderboards into personal milestones (Personal Best Single-Hit Damage, Most Reliable Finisher, Format Win-Streak Records, and Draft Trophy Cabinet) that are meaningful for a single offline player.
+  - **Community Server ("Global Meta & Player Leaderboards"):** Host multi-player analytics that require community sample sizes—Global Archetype Tier Lists, Core/Flex Win-Rate Deltas, Limited Card GIH WR / IWD, Global Salt Index, Player Win-Rate/Trophy Leaderboards, and Global Achievement Rarity percentages.
+- [ ] **Relational Best-of-3 Per-Game Tracking (`match_games`):**
+  - Split Bo3 series into per-game rows (`game_number`, `on_the_play`, `turns`, `sideboard_in_json`, `sideboard_out_json`) so turn-based achievements (`Gotta Go Fast`, `Marathon Master`) and Play/Draw win rates are evaluated per game rather than summed across a 3-game series.
 
+---
+
+### Phase 9: In-App Updater, Standalone Docker Server & Multi-OS Releases
+- [ ] **In-App Update Checker & One-Click Update Button:**
+  - Add a version checker in the sidebar/Settings that queries GitHub Releases for newer `vX.Y.Z+web.N` builds, displays release notes, and triggers Tauri's updater or opens the release asset.
+- [ ] **Standalone Dockerized Server (`Dockerfile` + `docker-compose.yml`):**
+  - Package `server/` (`rhystic-cloud-server`) into a self-contained Docker container with persistent SQLite volume mounting, health checks, and a 1-command `docker compose up -d` setup for self-hosters.
+- [ ] **Automated `+web` Release Pipeline (`.github/workflows/release.yml`):**
+  - Build Linux, Windows, macOS, and standalone `rhystic-cloud-server` binaries automatically whenever a `v*+web.*` tag is pushed.

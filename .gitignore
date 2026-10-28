@@ -10,6 +10,7 @@ dist/
 src-tauri/gen/
 launch.sh
 launch-test.sh
+PLATFORM_ROADMAP.md
 
 # Archive for obsolete / legacy assets and scratch files
 archive/
