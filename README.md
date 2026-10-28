@@ -1,4 +1,3 @@
-```markdown
 <p align="center">
   <img src="docs/assets/RhysticTrackerLogo.svg" alt="Rhystic Tracker Logo" width="520" />
 </p>
