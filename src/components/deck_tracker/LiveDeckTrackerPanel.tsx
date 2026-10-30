@@ -301,11 +301,11 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
       <div
         key={`${sectionType}-${card.grp_id}`}
         onClick={(e) => handleCardClick(card, e.currentTarget)}
-        className={`flex items-center justify-between px-2.5 py-1.5 cursor-pointer transition-colors ${
+        className={`flex items-center justify-between px-2.5 py-1.5 cursor-pointer ${
           isSelected
-            ? 'bg-amber-500/20 border-l-2 border-amber-400'
+            ? 'bg-amber-950 border-l-2 border-amber-400'
             : isOverlay
-              ? 'bg-slate-900/60 hover:bg-slate-800/70 border-b border-slate-800/40'
+              ? 'bg-slate-900 border-b border-slate-800'
               : 'hover:bg-white/5'
         } ${sectionType === 'dead' ? 'opacity-40 grayscale' : ''}`}
       >
@@ -398,9 +398,10 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
   /* ------------------------------------------------------------- */
   return (
     <div
-      className={`flex flex-col border select-none transition-all duration-150 shrink-0 ${
+      style={isOverlay ? { backfaceVisibility: 'hidden', transform: 'translateZ(0)' } : undefined}
+      className={`flex flex-col border select-none shrink-0 ${
         isOverlay
-          ? 'w-full h-full bg-slate-900/95 backdrop-blur-md text-white border-slate-700/80 rounded-lg shadow-2xl overflow-hidden'
+          ? 'w-full h-full min-h-[200px] min-w-[250px] bg-slate-900 text-white border-slate-700 rounded-lg shadow-2xl overflow-hidden'
           : 'w-[280px] h-full bg-neutral-950 border-r border-white/20 shadow-2xl z-20 rounded-none'
       }`}
     >
@@ -408,7 +409,7 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
       <div
         className={`flex items-center justify-between px-3 py-2 border-b ${
           isOverlay
-            ? 'border-slate-700/60 bg-slate-950/60'
+            ? 'border-slate-700 bg-slate-950'
             : 'border-white/10 bg-neutral-900/80'
         }`}
         data-tauri-drag-region={isOverlay ? 'true' : undefined}
@@ -434,7 +435,7 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
           {isOverlay && onDockBack && (
             <button
               onClick={onDockBack}
-              className="p-1 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1 text-neutral-300 bg-slate-800 border border-slate-700 cursor-pointer"
               title="Close floating overlay"
             >
               <Minimize2 className="w-3.5 h-3.5" />
@@ -455,7 +456,7 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
       </div>
 
       {/* Repurposed Draw Probabilities & Library Banner */}
-      <div className="bg-black/70 border-b border-white/10 p-2.5 flex flex-col gap-2">
+      <div className="bg-slate-950 border-b border-slate-800 p-2.5 flex flex-col gap-2">
         {/* Total Cards In Library Header */}
         <div className="flex items-center justify-between text-[11px]">
           <span className="text-neutral-400 font-sans uppercase font-bold tracking-wider text-[10px]">
@@ -476,7 +477,7 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
 
           <div className="grid grid-cols-3 gap-1.5 text-center">
             {/* Chance of drawing a land next */}
-            <div className="bg-neutral-900/90 border border-emerald-500/30 py-1 px-1 flex flex-col items-center">
+            <div className="bg-slate-900 border border-emerald-500/30 py-1 px-1 flex flex-col items-center">
               <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-emerald-400 font-sans font-bold">
                 <i className="ms ms-land text-[11px]" />
                 <span>Land</span>
@@ -486,7 +487,7 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
             </div>
 
             {/* Chance of drawing a creature next */}
-            <div className="bg-neutral-900/90 border border-amber-500/30 py-1 px-1 flex flex-col items-center">
+            <div className="bg-slate-900 border border-amber-500/30 py-1 px-1 flex flex-col items-center">
               <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-amber-400 font-sans font-bold">
                 <i className="ms ms-creature text-[11px]" />
                 <span>Creatures</span>
@@ -496,7 +497,7 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
             </div>
 
             {/* Chance of drawing a non-creature spell next */}
-            <div className="bg-neutral-900/90 border border-indigo-500/30 py-1 px-1 flex flex-col items-center">
+            <div className="bg-slate-900 border border-indigo-500/30 py-1 px-1 flex flex-col items-center">
               <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-indigo-400 font-sans font-bold">
                 <i className="ms ms-instant text-[11px]" />
                 <span>Spells</span>
@@ -509,7 +510,7 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
       </div>
 
       {/* Search and Sort Toolbar */}
-      <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 border-b border-white/10 bg-neutral-900/40 text-[11px]">
+      <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 border-b border-slate-800 bg-slate-900 text-[11px]">
         <div className="relative flex-1">
           <Search className="w-3 h-3 text-neutral-500 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -517,15 +518,15 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search deck..."
-            className="w-full bg-black/40 border border-white/10 pl-6 pr-2 py-0.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 rounded-none"
+            className="w-full bg-slate-950 border border-slate-700 pl-6 pr-2 py-0.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 rounded-none"
           />
         </div>
 
-        <div className="flex items-center gap-0.5 bg-black/40 border border-white/10 p-0.5 shrink-0">
+        <div className="flex items-center gap-0.5 bg-slate-950 border border-slate-700 p-0.5 shrink-0">
           <button
             onClick={() => handleSetSortMode('odds')}
-            className={`px-1.5 py-0.5 text-[10px] font-sans uppercase font-bold transition-colors ${
-              sortMode === 'odds' ? 'bg-amber-500/20 text-amber-300' : 'text-neutral-400 hover:text-white'
+            className={`px-1.5 py-0.5 text-[10px] font-sans uppercase font-bold cursor-pointer ${
+              sortMode === 'odds' ? 'bg-amber-950 text-amber-300' : 'text-neutral-400'
             }`}
             title="Sort by draw probability"
           >
@@ -533,8 +534,8 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
           </button>
           <button
             onClick={() => handleSetSortMode('mana')}
-            className={`px-1.5 py-0.5 text-[10px] font-sans uppercase font-bold transition-colors ${
-              sortMode === 'mana' ? 'bg-amber-500/20 text-amber-300' : 'text-neutral-400 hover:text-white'
+            className={`px-1.5 py-0.5 text-[10px] font-sans uppercase font-bold cursor-pointer ${
+              sortMode === 'mana' ? 'bg-amber-950 text-amber-300' : 'text-neutral-400'
             }`}
             title="Sort by mana cost"
           >
@@ -542,8 +543,8 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
           </button>
           <button
             onClick={() => handleSetSortMode('name')}
-            className={`px-1.5 py-0.5 text-[10px] font-sans uppercase font-bold transition-colors ${
-              sortMode === 'name' ? 'bg-amber-500/20 text-amber-300' : 'text-neutral-400 hover:text-white'
+            className={`px-1.5 py-0.5 text-[10px] font-sans uppercase font-bold cursor-pointer ${
+              sortMode === 'name' ? 'bg-amber-950 text-amber-300' : 'text-neutral-400'
             }`}
             title="Sort by card name"
           >
@@ -567,19 +568,19 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
         ref={scrollContainerRef}
         className={`flex-1 overflow-y-auto min-h-0 divide-y ${
           isOverlay
-            ? 'divide-slate-800/60 bg-slate-950/50 scrollbar-thin scrollbar-thumb-slate-700/50'
+            ? 'divide-slate-800 bg-slate-950 scrollbar-thin scrollbar-thumb-slate-700'
             : 'divide-white/5 bg-neutral-950 scrollbar-thin scrollbar-thumb-white/20'
         }`}
       >
         {/* Commander Section (Only shown in Brawl / Commander games) */}
         {isBrawl && commanderCard && (
           <div>
-            <div className="w-full bg-amber-950/40 border-y border-amber-500/30 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+            <div className="w-full bg-amber-950 border-y border-amber-500/30 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10">
               <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
                 <i className="ms ms-planeswalker text-[11px] text-amber-400" />
                 Commander
               </span>
-              <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold uppercase bg-amber-900 text-amber-300 border border-amber-500/30">
                 Command Zone
               </span>
             </div>
@@ -593,16 +594,16 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
             <button
               type="button"
               onClick={handleToggleHandFold}
-              className="w-full bg-sky-950/40 hover:bg-sky-900/40 border-y border-sky-500/20 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm cursor-pointer transition-colors"
+              className="w-full bg-sky-950 border-y border-sky-500/20 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10 cursor-pointer"
             >
               <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
                 Cards in Hand ({handCards.reduce((acc, c) => acc + (c.in_hand || 1), 0)})
               </span>
               {isHandFolded ? (
-                <ChevronRight className="w-3.5 h-3.5 text-sky-400/70" />
+                <ChevronRight className="w-3.5 h-3.5 text-sky-400" />
               ) : (
-                <ChevronDown className="w-3.5 h-3.5 text-sky-400/70" />
+                <ChevronDown className="w-3.5 h-3.5 text-sky-400" />
               )}
             </button>
             {!isHandFolded && handCards.map((c) => renderCardRow(c, 'hand'))}
@@ -615,16 +616,16 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
             <button
               type="button"
               onClick={handleToggleBoardFold}
-              className="w-full bg-emerald-950/40 hover:bg-emerald-900/40 border-y border-emerald-500/20 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm cursor-pointer transition-colors"
+              className="w-full bg-emerald-950 border-y border-emerald-500/20 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10 cursor-pointer"
             >
               <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 Cards on Battlefield ({boardCards.reduce((acc, c) => acc + (c.on_battlefield || 1), 0)})
               </span>
               {isBoardFolded ? (
-                <ChevronRight className="w-3.5 h-3.5 text-emerald-400/70" />
+                <ChevronRight className="w-3.5 h-3.5 text-emerald-400" />
               ) : (
-                <ChevronDown className="w-3.5 h-3.5 text-emerald-400/70" />
+                <ChevronDown className="w-3.5 h-3.5 text-emerald-400" />
               )}
             </button>
             {!isBoardFolded && boardCards.map((c) => renderCardRow(c, 'board'))}
@@ -633,14 +634,14 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
 
         {/* Section 3: Cards Still in Deck */}
         <div>
-          <div className="bg-neutral-900/90 border-y border-white/10 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+          <div className="bg-slate-900 border-y border-slate-700 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10">
             <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
               Cards Still in Deck ({deckCards.reduce((acc, c) => acc + c.remaining_count, 0)})
             </span>
           </div>
           {deckCards.length === 0 ? (
-            <div className="p-3 text-center text-xs text-neutral-500 font-sans uppercase">
+            <div className="p-3 text-center text-xs text-neutral-500 font-sans uppercase bg-slate-900">
               No cards remaining in deck
             </div>
           ) : (
@@ -654,7 +655,7 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
             <button
               type="button"
               onClick={handleToggleDeadFold}
-              className="w-full bg-black/60 hover:bg-neutral-900/60 border-y border-white/5 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm cursor-pointer transition-colors"
+              className="w-full bg-slate-950 border-y border-slate-800 px-2.5 py-1 flex items-center justify-between sticky top-0 z-10 cursor-pointer"
             >
               <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
@@ -702,13 +703,13 @@ const CardPreviewTray: React.FC<CardPreviewTrayProps> = ({
 }) => {
   return (
     <div
-      className={`shrink-0 bg-neutral-950 p-2.5 flex flex-col gap-2 shadow-2xl z-30 ${
+      className={`shrink-0 bg-slate-950 p-2.5 flex flex-col gap-2 shadow-2xl z-30 ${
         placement === 'top'
-          ? 'border-b-2 border-amber-500/50 animate-in slide-in-from-top-2 duration-150'
-          : 'border-t-2 border-amber-500/50 animate-in slide-in-from-bottom-2 duration-150'
+          ? 'border-b-2 border-amber-500/50'
+          : 'border-t-2 border-amber-500/50'
       }`}
     >
-      <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
         <div className="flex items-center gap-1.5 truncate">
           <i className={`${getCardTypeIconClass(card.card_type)} text-amber-400 text-xs shrink-0`} />
           <span className="font-bold text-xs text-white truncate">{card.name}</span>
@@ -722,7 +723,7 @@ const CardPreviewTray: React.FC<CardPreviewTrayProps> = ({
           )}
           <button
             onClick={onClose}
-            className="p-0.5 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors ml-1"
+            className="p-0.5 text-neutral-300 bg-slate-800 border border-slate-700 ml-1 cursor-pointer"
             title="Close Card Preview"
           >
             <X className="w-3.5 h-3.5" />

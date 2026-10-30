@@ -855,6 +855,7 @@ pub async fn toggle_deck_overlay(
             if let (Some(lx), Some(ly)) = (x, y) {
                 let _ = w.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(lx, ly)));
             }
+            let _ = w.set_resizable(true);
             let _ = w.show();
             let _ = w.set_always_on_top(true);
             let _ = w.set_focus();
@@ -862,8 +863,8 @@ pub async fn toggle_deck_overlay(
         }
     }
 
-    let init_w = width.unwrap_or(260.0).max(200.0);
-    let init_h = height.unwrap_or(440.0).max(220.0);
+    let init_w = width.unwrap_or(260.0).max(250.0);
+    let init_h = height.unwrap_or(440.0).max(200.0);
 
     #[cfg(target_os = "linux")]
     let use_transparency = false;
@@ -877,7 +878,7 @@ pub async fn toggle_deck_overlay(
     )
     .title("Rhystic Deck Overlay")
     .inner_size(init_w, init_h)
-    .min_inner_size(48.0, 48.0)
+    .min_inner_size(250.0, 200.0)
     .decorations(false)
     .transparent(use_transparency)
     .always_on_top(true)
@@ -890,6 +891,7 @@ pub async fn toggle_deck_overlay(
     }
 
     let w = builder.build().map_err(|e| e.to_string())?;
+    let _ = w.set_resizable(true);
     let _ = w.set_always_on_top(true);
     Ok(true)
 }
@@ -919,7 +921,7 @@ pub async fn set_deck_overlay_bounds(
             // Linux/X11 Resize Order: call set_resizable(true) BEFORE resizing.
             let _ = w.set_resizable(true);
             let _ = w.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
-            let _ = w.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(200.0, 220.0))));
+            let _ = w.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(250.0, 200.0))));
         }
 
         if let (Some(lx), Some(ly)) = (x, y) {
@@ -936,6 +938,7 @@ pub async fn set_deck_overlay_bounds(
 pub async fn open_deck_tracker_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
     if let Some(existing) = app.get_webview_window("live-deck-tracker") {
+        let _ = existing.set_resizable(true);
         let _ = existing.show();
         let _ = existing.unminimize();
         let _ = existing.set_focus();
@@ -956,7 +959,7 @@ pub async fn open_deck_tracker_window(app: tauri::AppHandle) -> Result<(), Strin
     )
     .title("Rhystic Tracker — Live Deck Tracker")
     .inner_size(280.0, 560.0)
-    .min_inner_size(60.0, 120.0)
+    .min_inner_size(250.0, 200.0)
     .resizable(true)
     .always_on_top(true)
     .decorations(false)
@@ -967,7 +970,9 @@ pub async fn open_deck_tracker_window(app: tauri::AppHandle) -> Result<(), Strin
         builder = builder.position(x, y);
     }
 
-    builder.build().map_err(|e| e.to_string())?;
+    let w = builder.build().map_err(|e| e.to_string())?;
+    let _ = w.set_resizable(true);
+    let _ = w.set_always_on_top(true);
 
     Ok(())
 }
