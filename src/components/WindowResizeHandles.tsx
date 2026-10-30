@@ -24,76 +24,81 @@ export const triggerResize = (direction: ResizeDirection) => {
 };
 
 export const WindowResizeHandles: React.FC = () => {
-  const handleResize = (direction: ResizeDirection) => (e: React.MouseEvent) => {
+  const handlePointerDown = (direction: ResizeDirection) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    triggerResize(direction);
+    const win = getCurrentWindow() as any;
+    if (typeof win.startResizing === 'function') {
+      win.startResizing(direction).catch(console.error);
+    } else if (typeof win.startResizeDragging === 'function') {
+      win.startResizeDragging(direction).catch(console.error);
+    }
   };
 
   return (
     <>
-      {/* Top Edge */}
+      {/* Top Edge (8px thick) */}
       <div
         data-resize-handle
-        onMouseDown={handleResize(ResizeDirection.North)}
-        className="absolute top-0 left-3 right-3 h-2 z-50 select-none cursor-ns-resize"
+        onPointerDown={handlePointerDown(ResizeDirection.North)}
+        className="absolute top-0 left-2 right-2 h-2 z-50 select-none cursor-ns-resize"
         style={{ cursor: 'ns-resize' }}
         title="Resize"
       />
-      {/* Bottom Edge */}
+      {/* Bottom Edge (8px thick) */}
       <div
         data-resize-handle
-        onMouseDown={handleResize(ResizeDirection.South)}
-        className="absolute bottom-0 left-3 right-3 h-2 z-50 select-none cursor-ns-resize"
+        onPointerDown={handlePointerDown(ResizeDirection.South)}
+        className="absolute bottom-0 left-2 right-2 h-2 z-50 select-none cursor-ns-resize"
         style={{ cursor: 'ns-resize' }}
         title="Resize"
       />
-      {/* Left Edge */}
+      {/* Left Edge (8px thick) */}
       <div
         data-resize-handle
-        onMouseDown={handleResize(ResizeDirection.West)}
-        className="absolute left-0 top-3 bottom-3 w-2 z-50 select-none cursor-ew-resize"
+        onPointerDown={handlePointerDown(ResizeDirection.West)}
+        className="absolute left-0 top-2 bottom-2 w-2 z-50 select-none cursor-ew-resize"
         style={{ cursor: 'ew-resize' }}
         title="Resize"
       />
-      {/* Right Edge */}
+      {/* Right Edge (8px thick) */}
       <div
         data-resize-handle
-        onMouseDown={handleResize(ResizeDirection.East)}
-        className="absolute right-0 top-3 bottom-3 w-2 z-50 select-none cursor-ew-resize"
+        onPointerDown={handlePointerDown(ResizeDirection.East)}
+        className="absolute right-0 top-2 bottom-2 w-2 z-50 select-none cursor-ew-resize"
         style={{ cursor: 'ew-resize' }}
         title="Resize"
       />
-      {/* Top-Left Corner */}
+      {/* Top-Left Corner (8x8px) */}
       <div
         data-resize-handle
-        onMouseDown={handleResize(ResizeDirection.NorthWest)}
-        className="absolute top-0 left-0 w-3.5 h-3.5 z-50 select-none cursor-nwse-resize"
+        onPointerDown={handlePointerDown(ResizeDirection.NorthWest)}
+        className="absolute top-0 left-0 w-2 h-2 z-50 select-none cursor-nwse-resize"
         style={{ cursor: 'nwse-resize' }}
         title="Resize"
       />
-      {/* Top-Right Corner */}
+      {/* Top-Right Corner (8x8px) */}
       <div
         data-resize-handle
-        onMouseDown={handleResize(ResizeDirection.NorthEast)}
-        className="absolute top-0 right-0 w-3.5 h-3.5 z-50 select-none cursor-nesw-resize"
+        onPointerDown={handlePointerDown(ResizeDirection.NorthEast)}
+        className="absolute top-0 right-0 w-2 h-2 z-50 select-none cursor-nesw-resize"
         style={{ cursor: 'nesw-resize' }}
         title="Resize"
       />
-      {/* Bottom-Left Corner */}
+      {/* Bottom-Left Corner (8x8px) */}
       <div
         data-resize-handle
-        onMouseDown={handleResize(ResizeDirection.SouthWest)}
-        className="absolute bottom-0 left-0 w-3.5 h-3.5 z-50 select-none cursor-nesw-resize"
+        onPointerDown={handlePointerDown(ResizeDirection.SouthWest)}
+        className="absolute bottom-0 left-0 w-2 h-2 z-50 select-none cursor-nesw-resize"
         style={{ cursor: 'nesw-resize' }}
         title="Resize"
       />
-      {/* Bottom-Right Corner */}
+      {/* Bottom-Right Corner (8x8px) */}
       <div
         data-resize-handle
-        onMouseDown={handleResize(ResizeDirection.SouthEast)}
-        className="absolute bottom-0 right-0 w-3.5 h-3.5 z-50 select-none cursor-nwse-resize"
+        onPointerDown={handlePointerDown(ResizeDirection.SouthEast)}
+        className="absolute bottom-0 right-0 w-2 h-2 z-50 select-none cursor-nwse-resize"
         style={{ cursor: 'nwse-resize' }}
         title="Resize"
       />

@@ -934,7 +934,7 @@ pub async fn set_deck_overlay_bounds(
 #[tauri::command]
 pub async fn open_deck_tracker_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
-    if let Some(existing) = app.get_webview_window("live-deck-tracker") {
+    if let Some(existing) = app.get_webview_window("live-deck-tracker").or_else(|| app.get_webview_window("deck-tracker-overlay")) {
         let _ = existing.set_resizable(true);
         let _ = existing.show();
         let _ = existing.unminimize();
@@ -943,8 +943,6 @@ pub async fn open_deck_tracker_window(app: tauri::AppHandle) -> Result<(), Strin
     }
 
     let settings = crate::settings::load_settings();
-
-    let use_transparency = true;
 
     let mut builder = tauri::WebviewWindowBuilder::new(
         &app,
@@ -957,7 +955,7 @@ pub async fn open_deck_tracker_window(app: tauri::AppHandle) -> Result<(), Strin
     .resizable(true)
     .always_on_top(true)
     .decorations(false)
-    .transparent(use_transparency)
+    .transparent(true)
     .devtools(true);
 
     if let Some((x, y)) = settings.deck_tracker_position {
@@ -982,6 +980,9 @@ pub async fn save_deck_tracker_position(x: f64, y: f64) -> Result<(), String> {
 pub async fn close_deck_tracker_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
     if let Some(existing) = app.get_webview_window("live-deck-tracker") {
+        let _ = existing.close();
+    }
+    if let Some(existing) = app.get_webview_window("deck-tracker-overlay") {
         let _ = existing.close();
     }
     if let Some(existing) = app.get_webview_window("deck-overlay") {

@@ -440,12 +440,6 @@ export const LiveDeckOverlayWindow: React.FC = () => {
         onPointerDown={handleSymbolPointerDown}
         onPointerMove={handleSymbolPointerMove}
         onPointerUp={handleSymbolPointerUp}
-        style={{
-          backfaceVisibility: 'hidden',
-          WebkitBackfaceVisibility: 'hidden',
-          transform: 'translateZ(0)',
-          WebkitTransform: 'translateZ(0)',
-        }}
         title="Click to expand Live Deck Overlay • Drag to reposition"
         className={`w-[48px] h-[48px] rounded-full flex items-center justify-center cursor-pointer select-none relative overflow-hidden bg-slate-900/70 backdrop-blur-md shadow-2xl ${
           isMatchActive
@@ -471,13 +465,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
   // 2. EXPANDED OVERLAY MODE (~260x440 px default, user-resizable)
   return (
     <div
-      style={{
-        opacity,
-        backfaceVisibility: 'hidden',
-        WebkitBackfaceVisibility: 'hidden',
-        transform: 'translateZ(0)',
-        WebkitTransform: 'translateZ(0)',
-      }}
+      style={{ opacity }}
       className="w-full h-full min-h-[200px] min-w-[250px] flex flex-col overflow-hidden select-none bg-slate-900/60 backdrop-blur-md text-white border border-white/10 rounded-lg shadow-2xl relative"
     >
       {/* Edge & Corner Resize Handles for Frameless Window */}
@@ -652,7 +640,15 @@ export const LiveDeckOverlayWindow: React.FC = () => {
       </div>
 
       {/* REMAINING CARD LIST (Single-line per card) */}
-      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-white/[0.05] bg-slate-950/30">
+      <div
+        style={{
+          backfaceVisibility: 'hidden',
+          WebkitBackfaceVisibility: 'hidden',
+          transform: 'translateZ(0)',
+          WebkitTransform: 'translateZ(0)',
+        }}
+        className="flex-1 min-h-0 overflow-y-auto divide-y divide-white/[0.05] bg-slate-950/30"
+      >
         {!deckTracker?.has_deck ? (
           <div className="h-full flex flex-col items-center justify-center px-4 text-center">
             <img
@@ -679,6 +675,12 @@ export const LiveDeckOverlayWindow: React.FC = () => {
             return (
               <div
                 key={card.grp_id}
+                style={{
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  transform: 'translateZ(0)',
+                  WebkitTransform: 'translateZ(0)',
+                }}
                 className={`relative flex items-center justify-between gap-1.5 px-2 h-6 overflow-hidden transition-colors ${
                   isDepleted ? 'opacity-35 grayscale bg-black/30' : 'bg-slate-900/40 hover:bg-white/[0.08]'
                 }`}

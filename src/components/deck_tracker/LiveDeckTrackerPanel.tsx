@@ -301,6 +301,12 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
       <div
         key={`${sectionType}-${card.grp_id}`}
         onClick={(e) => handleCardClick(card, e.currentTarget)}
+        style={{
+          backfaceVisibility: 'hidden',
+          WebkitBackfaceVisibility: 'hidden',
+          transform: 'translateZ(0)',
+          WebkitTransform: 'translateZ(0)',
+        }}
         className={`flex items-center justify-between px-2.5 py-1.5 cursor-pointer ${
           isSelected
             ? 'bg-amber-500/20 border-l-2 border-amber-400'
@@ -398,7 +404,6 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
   /* ------------------------------------------------------------- */
   return (
     <div
-      style={isOverlay ? { backfaceVisibility: 'hidden', transform: 'translateZ(0)' } : undefined}
       className={`flex flex-col border select-none shrink-0 ${
         isOverlay
           ? 'w-full h-full min-h-[200px] min-w-[250px] bg-transparent text-white border-none shadow-none overflow-hidden'
@@ -580,6 +585,12 @@ export const LiveDeckTrackerPanel: React.FC<LiveDeckTrackerPanelProps> = ({
       {/* Cards List Grouped into Sections */}
       <div
         ref={scrollContainerRef}
+        style={{
+          backfaceVisibility: 'hidden',
+          WebkitBackfaceVisibility: 'hidden',
+          transform: 'translateZ(0)',
+          WebkitTransform: 'translateZ(0)',
+        }}
         className={`flex-1 overflow-y-auto min-h-0 divide-y ${
           isOverlay
             ? 'divide-white/5 bg-slate-950/30 scrollbar-thin scrollbar-thumb-white/20'

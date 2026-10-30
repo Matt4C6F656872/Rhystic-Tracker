@@ -25,7 +25,7 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
-/* Stable transparent base and GPU layer promotion for the frameless pop-out deck overlay window */
+/* Stable transparent base for the frameless pop-out deck overlay window */
 html.overlay-window,
 html.overlay-window body,
 html.overlay-window #root {
@@ -34,9 +34,6 @@ html.overlay-window #root {
   background: transparent !important;
   background-color: transparent !important;
   overflow: hidden;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  transform: translateZ(0);
 }
 
 html.overlay-window ::-webkit-scrollbar {

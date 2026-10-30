@@ -157,12 +157,6 @@ export const DeckTrackerOverlayView: React.FC = () => {
     <ErrorBoundary fallbackTitle="Overlay Deck Tracker Error">
       <div
         onMouseDown={handleStartDragging}
-        style={{
-          backfaceVisibility: 'hidden',
-          WebkitBackfaceVisibility: 'hidden',
-          transform: 'translateZ(0)',
-          WebkitTransform: 'translateZ(0)',
-        }}
         className="w-full h-full min-h-[200px] min-w-[250px] bg-slate-900/60 backdrop-blur-md text-white border border-white/10 rounded-lg shadow-2xl overflow-hidden select-none flex flex-col relative"
       >
         {/* Edge & Corner Resize Handles for Frameless Window */}
