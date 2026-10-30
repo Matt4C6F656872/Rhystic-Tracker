@@ -1027,7 +1027,10 @@ fn main() {
             flush_sync_outbox,
             open_deck_tracker_window,
             save_deck_tracker_position,
-            close_deck_tracker_window
+            close_deck_tracker_window,
+            check_for_app_update,
+            install_app_update,
+            restart_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

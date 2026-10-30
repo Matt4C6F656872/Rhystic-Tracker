@@ -99,9 +99,29 @@ if [ -z "$BIN_SOURCE" ]; then
     exit 1
 fi
 
+# Gracefully stop any running instance so the binary can be replaced cleanly.
+if command -v pgrep >/dev/null 2>&1 && pgrep -x "$EXEC_NAME" >/dev/null 2>&1; then
+    echo "  -> Stopping running $APP_NAME instance..."
+    pkill -x "$EXEC_NAME" || true
+    for _ in $(seq 1 20); do pgrep -x "$EXEC_NAME" >/dev/null || break; sleep 0.25; done
+    pkill -9 -x "$EXEC_NAME" 2>/dev/null || true
+fi
+
+# Clean uninstall of the previous launcher artefacts ONLY. User data in
+# ~/.config/rhystic-tracker (rhystic.db, sync_settings.json), ~/.config/com.rhystic.tracker
+# and ~/.local/share/com.rhystic.tracker is never touched.
+echo "  -> Removing previous installation files (user data is preserved)"
+rm -f -- "$INSTALL_DIR/$EXEC_NAME.new" "$INSTALL_DIR/$EXEC_NAME.update-new"
+rm -f -- "$DESKTOP_DIR/$EXEC_NAME.desktop" "$DESKTOP_DIR/com.rhystic.tracker.desktop"
+for size in 16 24 32 48 64 128 256 512 1024; do
+    rm -f -- "$HOME/.local/share/icons/hicolor/${size}x${size}/apps/$ICON_NAME.png"
+done
+
 echo "  -> Installing binary to $INSTALL_DIR/$EXEC_NAME"
-cp -f "$BIN_SOURCE" "$INSTALL_DIR/$EXEC_NAME"
-chmod +x "$INSTALL_DIR/$EXEC_NAME"
+# Copy to a temp name then rename so a half-written binary is never left behind.
+cp -f "$BIN_SOURCE" "$INSTALL_DIR/$EXEC_NAME.new"
+chmod +x "$INSTALL_DIR/$EXEC_NAME.new"
+mv -f "$INSTALL_DIR/$EXEC_NAME.new" "$INSTALL_DIR/$EXEC_NAME"
 
 # Install helper scripts (e.g. avatar extractor) if present
 SCRIPT_SOURCE=""
@@ -177,7 +197,7 @@ if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
 fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-    gtk-update-icon-cache "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+    gtk-update-icon-cache -f -t -q "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 fi
 
 echo "✅ $APP_NAME successfully installed!"

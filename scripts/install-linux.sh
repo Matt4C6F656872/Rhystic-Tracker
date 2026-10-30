@@ -64,6 +64,8 @@ fi
 [ -x "$BIN_SRC" ] || { echo "ERROR: $BIN_SRC not found - build first." >&2; exit 1; }
 
 # ---- 2. Stop any running instance (single-instance would hand off to it) -----
+# SIGTERM first so the app can flush SQLite/WAL and sync state, then escalate
+# only if it hasn't exited after ~5s.
 if pgrep -x rhystic-tracker >/dev/null 2>&1; then
   echo "==> Stopping running Rhystic Tracker"
   pkill -x rhystic-tracker || true
@@ -71,7 +73,63 @@ if pgrep -x rhystic-tracker >/dev/null 2>&1; then
   pkill -9 -x rhystic-tracker 2>/dev/null || true
 fi
 
-# ---- 3. Install -------------------------------------------------------------
+# ---- 3. Clean uninstall of the previous version -------------------------------
+# Removes ONLY launcher artefacts (binary, .desktop entries, hicolor icons).
+# User data is never touched:
+#   ~/.config/rhystic-tracker/         rhystic.db, settings.json, sync_settings.json
+#   ~/.config/com.rhystic.tracker/     avatar / card-image caches
+#   ~/.local/share/com.rhystic.tracker/ WebView localStorage (UI preferences)
+#   ~/.local/share/rhystic-tracker/    avatar-extractor Python venv
+PROTECTED_DIRS=(
+  "${XDG_CONFIG_HOME:-$HOME/.config}/rhystic-tracker"
+  "${XDG_CONFIG_HOME:-$HOME/.config}/com.rhystic.tracker"
+  "${XDG_DATA_HOME:-$HOME/.local/share}/com.rhystic.tracker"
+  "${XDG_DATA_HOME:-$HOME/.local/share}/rhystic-tracker"
+)
+
+# Delete a single regular file / symlink, refusing directories and anything
+# that resolves inside a protected user-data directory.
+safe_rm() {
+  local target="$1" resolved protected
+  [ -e "$target" ] || [ -L "$target" ] || return 0
+  if [ -d "$target" ] && [ ! -L "$target" ]; then
+    echo "    ! refusing to remove directory: $target" >&2
+    return 0
+  fi
+  resolved="$(readlink -f "$target" 2>/dev/null || echo "$target")"
+  for protected in "${PROTECTED_DIRS[@]}"; do
+    case "$resolved" in
+      "$protected"|"$protected"/*)
+        echo "    ! refusing to remove protected user data: $target" >&2
+        return 0 ;;
+    esac
+  done
+  case "$(basename "$resolved")" in
+    *.db|*.db-wal|*.db-shm|settings*.json|sync_settings*.json)
+      echo "    ! refusing to remove user data file: $target" >&2
+      return 0 ;;
+  esac
+  rm -f -- "$target" && echo "    - removed $target"
+}
+
+echo "==> Removing previous installation (user data is preserved)"
+# Binary plus leftovers from interrupted installs / in-app updates.
+safe_rm "$BIN_DST"
+safe_rm "$BIN_DST.new"
+safe_rm "$BIN_DST.update-new"
+# Launchers written by this script, install.sh, or older releases.
+APPS_DIR="$(dirname "$DESKTOP_DST")"
+safe_rm "$DESKTOP_DST"
+safe_rm "$APPS_DIR/com.rhystic.tracker.desktop"
+safe_rm "$APPS_DIR/Rhystic Tracker.desktop"
+# Icons at every hicolor size we (or install.sh) have ever shipped.
+for size in 16 24 32 48 64 128 256 512 1024; do
+  safe_rm "$ICON_ROOT/${size}x${size}/apps/rhystic-tracker.png"
+done
+safe_rm "$ICON_ROOT/scalable/apps/rhystic-tracker.svg"
+safe_rm "$HOME/.local/share/pixmaps/rhystic-tracker.png"
+
+# ---- 4. Install -------------------------------------------------------------
 echo "==> Installing to $BIN_DST"
 mkdir -p "$(dirname "$BIN_DST")" "$(dirname "$DESKTOP_DST")" "$(dirname "$LOG_FILE")"
 install -m 755 "$BIN_SRC" "$BIN_DST.new"
@@ -98,12 +156,19 @@ Categories=Game;Utility;
 StartupNotify=false
 Keywords=mtg;magic;arena;tracker;rhystic;
 EOF
+# ---- 5. Refresh desktop + icon databases ---------------------------------------
+# Each step is optional and best-effort: missing tools must never fail the install.
+# -t lets gtk-update-icon-cache work on a per-user hicolor dir without index.theme.
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$(dirname "$DESKTOP_DST")" 2>/dev/null || true
-command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q "$ICON_ROOT" 2>/dev/null || true
+command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -f -t -q "$ICON_ROOT" 2>/dev/null || true
+command -v xdg-desktop-menu >/dev/null 2>&1 && xdg-desktop-menu forceupdate 2>/dev/null || true
+for kbuild in kbuildsycoca6 kbuildsycoca5; do
+  if command -v "$kbuild" >/dev/null 2>&1; then "$kbuild" >/dev/null 2>&1 || true; break; fi
+done
 
 echo "==> Installed $(stat -c '%y' "$BIN_DST" | cut -d. -f1)"
 
-# ---- 4. Launch --------------------------------------------------------------
+# ---- 6. Launch --------------------------------------------------------------
 if [ "$DO_RUN" = 1 ]; then
   echo "==> Launching (log: $LOG_FILE)"
   # Detach fully and send stdout/stderr to a file: the backend prints a lot, and a

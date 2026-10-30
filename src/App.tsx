@@ -3,11 +3,13 @@ import {
   Layers, 
   PanelLeftClose, 
   PanelLeftOpen, 
+  ArrowUpCircle,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { ManaPip } from './components/ManaPip';
 import { getCardStylePref } from './utils/cardStylePrefs';
+import { useAppUpdate, checkForAppUpdate } from './utils/appUpdate';
 import { SettingsView } from './components/SettingsView';
 import { CardItem } from './components/CardBreakdown';
 import { FullMatchInfoModal } from './components/FullMatchInfoModal';
@@ -236,6 +238,17 @@ export default function App() {
     }, 2000);
     return () => clearTimeout(t);
   }, []);
+
+  // In-app update state & automatic startup check
+  const appUpdate = useAppUpdate();
+  useEffect(() => {
+    if (appUpdate.autoCheck) {
+      const timer = setTimeout(() => {
+        checkForAppUpdate().catch(() => {});
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [appUpdate.autoCheck]);
 
   // One-time Avatar Feature Onboarding Modal
   const [showAvatarOnboarding, setShowAvatarOnboarding] = useState(false);
@@ -1316,6 +1329,34 @@ export default function App() {
             })}
           </nav>
         </div>
+
+        {/* Subtle Update Available Indicator */}
+        {appUpdate.info?.update_available && (
+          <div className="shrink-0 mb-3 pt-2 border-t border-white/5">
+            {isSidebarCollapsed ? (
+              <button
+                onClick={() => setActiveTab('settings')}
+                className="w-full py-1.5 flex items-center justify-center border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition-all cursor-pointer relative group"
+                title={`Rhystic Tracker v${appUpdate.info.latest_version} available — click to open Settings`}
+              >
+                <ArrowUpCircle className="w-4 h-4 animate-pulse text-emerald-400" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-black" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setActiveTab('settings')}
+                className="w-full px-2.5 py-1.5 flex items-center justify-between border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-[11px] font-mono transition-colors group cursor-pointer"
+                title={`Rhystic Tracker v${appUpdate.info.latest_version} available — click to open Settings`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span className="truncate font-semibold">v{appUpdate.info.latest_version} Available</span>
+                </span>
+                <ArrowUpCircle className="w-3.5 h-3.5 shrink-0 opacity-75 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Sidebar Footer: mana theme selector + collapse chevron. When the
             sidebar is open the chevron sits on the left of the pips in one row;

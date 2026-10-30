@@ -5,6 +5,9 @@ version = "2.0.0"
 description = "Rhystic Tracker Tauri Desktop Application"
 authors = ["Dave Pople"]
 edition = "2021"
+# Also drives the in-app update checker (see `resolve_update_repo_slug` in
+# src/commands/system.rs). Override at build time with RHYSTIC_UPDATE_REPO=owner/repo.
+repository = "https://github.com/Matt4C6F656872/Rhystic-Tracker-Web"
 
 [features]
 production-env = []
@@ -24,3 +27,4 @@ sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "chr
 dirs = "5.0"
 tauri-plugin-single-instance = "2"
 reqwest = { version = "0.13", features = ["json"] }
+sha2 = "0.10"

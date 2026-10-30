@@ -775,6 +775,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const matchStartupTab = matchesSearch(['startup', 'tab', 'default startup', 'navigation', 'dashboard', 'live hud', 'initial view']);
   const matchPersistDashboardPage = matchesSearch(['persist', 'remember dashboard', 'remember page', 'active page', 'dashboard page', 'default dashboard', 'switch page']);
   const matchSetupWizard = matchesSearch(['setup', 'wizard', 'assistant', 're-run', 'first-time', 'first time', 'scan', 'index', 'onboarding']);
+  const matchUpdates = matchesSearch(['update', 'updates', 'version', 'github', 'release', 'upgrade', 'check for updates', 'updater']);
 
   const matchThemes = matchesSearch(['theme', 'mana', 'color', 'identity', 'white', 'blue', 'black', 'red', 'green', 'accent', 'appearance', 'palette']);
   const matchGlassOpacity = matchesSearch(['glass', 'opacity', 'transparency', 'contrast', 'tint', 'backdrop', 'blur', 'obsidian']);
@@ -812,6 +813,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (matchStartupTab) count++;
     if (matchPersistDashboardPage) count++;
     if (matchSetupWizard) count++;
+    if (matchUpdates) count++;
     if (matchThemes) count++;
     if (matchGlassOpacity) count++;
     if (matchManaPipStyle) count++;
@@ -833,7 +835,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     return count;
   }, [
     q, matchMinimize, matchAutoSwitch, matchAlwaysOnTop, matchAudioCues, matchExcludeSparky, matchAutoExport,
-    matchConfirmDelete, matchAllowDelete, matchStartupTab, matchPersistDashboardPage, matchSetupWizard, matchThemes, matchGlassOpacity,
+    matchConfirmDelete, matchAllowDelete, matchStartupTab, matchPersistDashboardPage, matchSetupWizard, matchUpdates, matchThemes, matchGlassOpacity,
     matchManaPipStyle, matchCollectionSort, matchCompactMode, matchDeckFlair, matchBackground,
     matchLogPath, matchBo3Sideboard, matchInstallLocations, matchDbStats, matchAutoBackup, matchImageCache,
     matchCacheQuota, matchCardDbSync, matchSetCatalog, matchAboutSummary, matchLegal
@@ -932,7 +934,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {/* ========================================================================= */}
           {/* SECTION: GENERAL & BEHAVIOR                                              */}
           {/* ========================================================================= */}
-          {(!isSearching ? activeTab === 'general' : (matchMinimize || matchAutoSwitch || matchAlwaysOnTop || matchAutoOpenDeckTracker || matchAudioCues || matchExcludeSparky || matchAutoExport || matchConfirmDelete || matchAllowDelete || matchStartupTab || matchPersistDashboardPage || matchSetupWizard)) && (
+          {(!isSearching ? activeTab === 'general' : (matchMinimize || matchAutoSwitch || matchAlwaysOnTop || matchAutoOpenDeckTracker || matchAudioCues || matchExcludeSparky || matchAutoExport || matchConfirmDelete || matchAllowDelete || matchStartupTab || matchPersistDashboardPage || matchSetupWizard || matchUpdates)) && (
             <GeneralTab
               palette={palette}
               isSearching={isSearching}
@@ -948,6 +950,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               matchStartupTab={matchStartupTab}
               matchPersistDashboardPage={matchPersistDashboardPage}
               matchSetupWizard={matchSetupWizard}
+              matchUpdates={matchUpdates}
               minimizeToTray={minimizeToTray}
               autoSwitchLiveView={autoSwitchLiveView}
               liveHudAlwaysOnTop={liveHudAlwaysOnTop}

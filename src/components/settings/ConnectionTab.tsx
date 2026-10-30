@@ -470,17 +470,20 @@ export const ConnectionTab: React.FC<ConnectionTabProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-              <div className="space-y-1.5">
+            {/* Token + endpoint blocks stay stacked until 2xl. Both grid items carry
+                min-w-0 so the inputs' intrinsic width can never push the token
+                action buttons out of their column and over the endpoint input. */}
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 pt-1 min-w-0">
+              <div className="space-y-1.5 min-w-0">
                 <label className="text-[10px] font-mono uppercase text-neutral-400 font-bold">
                   Secret Contributor Token (Handle Claim Key)
                 </label>
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                   <input
                     type="text"
                     readOnly
                     value={syncStatus?.contributor_id || '—'}
-                    className="flex-1 px-2.5 py-1.5 border border-white/10 bg-black/40 text-[11px] font-mono text-neutral-300 select-all"
+                    className="min-w-0 flex-1 basis-56 px-2.5 py-1.5 border border-white/10 bg-black/40 text-[11px] font-mono text-neutral-300 select-all"
                   />
                   <button
                     type="button"
@@ -509,13 +512,13 @@ export const ConnectionTab: React.FC<ConnectionTabProps> = ({
                   </button>
                 </div>
                 {showRestoreToken && (
-                  <div className="flex items-center gap-1.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1 min-w-0">
                     <input
                       type="text"
                       value={restoreTokenInput}
                       onChange={(e) => setRestoreTokenInput(e.target.value)}
                       placeholder="Paste backed-up Contributor UUID token…"
-                      className="flex-1 px-2.5 py-1 border border-amber-400/30 bg-black/60 text-[11px] font-mono text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-400"
+                      className="min-w-0 flex-1 basis-56 px-2.5 py-1 border border-amber-400/30 bg-black/60 text-[11px] font-mono text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-400"
                     />
                     <button
                       type="button"
@@ -531,16 +534,16 @@ export const ConnectionTab: React.FC<ConnectionTabProps> = ({
                 </p>
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <label className="text-[10px] font-mono uppercase text-neutral-400 font-bold">
                   Ingestion Server Endpoint
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <input
                     type="text"
                     value={serverUrlInput}
                     onChange={(e) => setServerUrlInput(e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 border border-white/10 bg-white/[0.03] text-[11px] font-mono text-white focus:outline-none focus:border-white/30"
+                    className="min-w-0 flex-1 basis-56 px-2.5 py-1.5 border border-white/10 bg-white/[0.03] text-[11px] font-mono text-white focus:outline-none focus:border-white/30"
                   />
                   <button
                     type="button"
