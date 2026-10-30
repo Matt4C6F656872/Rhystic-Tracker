@@ -866,9 +866,6 @@ pub async fn toggle_deck_overlay(
     let init_w = width.unwrap_or(260.0).max(250.0);
     let init_h = height.unwrap_or(440.0).max(200.0);
 
-    #[cfg(target_os = "linux")]
-    let use_transparency = false;
-    #[cfg(not(target_os = "linux"))]
     let use_transparency = true;
 
     let mut builder = tauri::WebviewWindowBuilder::new(
@@ -947,9 +944,6 @@ pub async fn open_deck_tracker_window(app: tauri::AppHandle) -> Result<(), Strin
 
     let settings = crate::settings::load_settings();
 
-    #[cfg(target_os = "linux")]
-    let use_transparency = false;
-    #[cfg(not(target_os = "linux"))]
     let use_transparency = true;
 
     let mut builder = tauri::WebviewWindowBuilder::new(

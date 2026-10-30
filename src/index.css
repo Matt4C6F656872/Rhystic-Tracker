@@ -25,24 +25,18 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
-/* Stable background and rendering for the frameless pop-out deck overlay window */
+/* Stable transparent base and GPU layer promotion for the frameless pop-out deck overlay window */
 html.overlay-window,
 html.overlay-window body,
 html.overlay-window #root {
   width: 100%;
   height: 100%;
-  background: #0f172a !important;
-  background-color: #0f172a !important;
+  background: transparent !important;
+  background-color: transparent !important;
   overflow: hidden;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   transform: translateZ(0);
-}
-
-html.overlay-window * {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  transition: none !important;
 }
 
 html.overlay-window ::-webkit-scrollbar {
