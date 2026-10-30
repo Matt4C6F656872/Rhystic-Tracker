@@ -435,7 +435,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
         onPointerMove={handleSymbolPointerMove}
         onPointerUp={handleSymbolPointerUp}
         title="Click to expand Live Deck Overlay • Drag to reposition"
-        className={`w-[48px] h-[48px] rounded-full flex items-center justify-center cursor-pointer select-none relative overflow-hidden bg-[#0e0e12] ${
+        className={`w-[48px] h-[48px] rounded-full flex items-center justify-center cursor-pointer select-none relative overflow-hidden bg-slate-900/95 backdrop-blur-md shadow-2xl ${
           isMatchActive
             ? 'border-2 border-emerald-400'
             : 'border border-sky-400'
@@ -459,13 +459,14 @@ export const LiveDeckOverlayWindow: React.FC = () => {
   // 2. EXPANDED OVERLAY MODE (~260x440 px default, user-resizable)
   return (
     <div
-      className="w-screen h-screen flex flex-col overflow-hidden select-none border border-white/20 text-white bg-[#0e0e12]"
+      style={{ opacity }}
+      className="w-screen h-screen flex flex-col overflow-hidden select-none bg-slate-900/95 backdrop-blur-md text-white border border-slate-700/80 rounded-lg shadow-2xl"
     >
       {/* DRAGGABLE HEADER */}
       <div
         data-tauri-drag-region
         onPointerDown={handleHeaderDragStart}
-        className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 border-b border-white/15 bg-black/40 cursor-move shrink-0"
+        className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 border-b border-slate-700/60 bg-slate-950/60 cursor-move shrink-0"
       >
         <div className="flex items-center gap-1.5 min-w-0 pointer-events-none">
           <img src={symbolIcon} alt="" className="w-4 h-4 object-contain shrink-0" />
@@ -537,7 +538,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
       )}
 
       {/* TOP SUMMARY BAR: Land Draw % and Non-Land Draw % (Omit total library counter) */}
-      <div className="grid grid-cols-2 gap-1.5 px-2 py-1.5 border-b border-white/10 bg-black/25 shrink-0">
+      <div className="grid grid-cols-2 gap-1.5 px-2 py-1.5 border-b border-slate-700/60 bg-slate-950/40 shrink-0">
         {/* Land Draw % Pill */}
         <div className="border border-amber-500/25 bg-black/40 px-2 py-1 flex flex-col justify-between">
           <div className="flex items-center justify-between gap-1">
@@ -578,14 +579,14 @@ export const LiveDeckOverlayWindow: React.FC = () => {
       </div>
 
       {/* SORT SELECTOR & 0x TOGGLE BAR */}
-      <div className="flex items-center justify-between gap-1 px-2 py-1 bg-black/35 border-b border-white/10 shrink-0 text-[9.5px] font-mono uppercase">
+      <div className="flex items-center justify-between gap-1 px-2 py-1 bg-slate-950/60 border-b border-slate-700/60 shrink-0 text-[9.5px] font-mono uppercase">
         <div className="flex items-center gap-1">
           <button
             onClick={() => handleSortModeChange('prob')}
             className={`px-1.5 py-0.5 border cursor-pointer font-bold ${
               sortMode === 'prob'
                 ? 'bg-sky-500/25 text-sky-300 border-sky-400/40'
-                : 'bg-transparent text-neutral-400 border-transparent'
+                : 'bg-slate-900/60 text-slate-400 border-slate-800/80 hover:bg-slate-800/80 hover:text-white'
             }`}
             title="Sort by Next-Draw % (tie-broken by CMC, then Name)"
           >
@@ -596,7 +597,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
             className={`px-1.5 py-0.5 border cursor-pointer font-bold ${
               sortMode === 'cmc'
                 ? 'bg-sky-500/25 text-sky-300 border-sky-400/40'
-                : 'bg-transparent text-neutral-400 border-transparent'
+                : 'bg-slate-900/60 text-slate-400 border-slate-800/80 hover:bg-slate-800/80 hover:text-white'
             }`}
             title="Sort by Mana Value / CMC (tie-broken by Name)"
           >
@@ -607,7 +608,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
             className={`px-1.5 py-0.5 border cursor-pointer font-bold ${
               sortMode === 'name'
                 ? 'bg-sky-500/25 text-sky-300 border-sky-400/40'
-                : 'bg-transparent text-neutral-400 border-transparent'
+                : 'bg-slate-900/60 text-slate-400 border-slate-800/80 hover:bg-slate-800/80 hover:text-white'
             }`}
             title="Sort Alphabetically (A–Z)"
           >
@@ -630,7 +631,7 @@ export const LiveDeckOverlayWindow: React.FC = () => {
       </div>
 
       {/* REMAINING CARD LIST (Single-line per card) */}
-      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-white/[0.05]">
+      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-800/60 bg-slate-950/50">
         {!deckTracker?.has_deck ? (
           <div className="h-full flex flex-col items-center justify-center px-4 text-center">
             <img
@@ -657,8 +658,8 @@ export const LiveDeckOverlayWindow: React.FC = () => {
             return (
               <div
                 key={card.grp_id}
-                className={`relative flex items-center justify-between gap-1.5 px-2 h-6 overflow-hidden ${
-                  isDepleted ? 'opacity-35 grayscale bg-black/30' : 'bg-transparent'
+                className={`relative flex items-center justify-between gap-1.5 px-2 h-6 overflow-hidden transition-colors ${
+                  isDepleted ? 'opacity-35 grayscale bg-slate-950/70' : 'bg-slate-900/50 hover:bg-slate-800/60'
                 }`}
               >
                 {/* Subtle probability fill bar */}

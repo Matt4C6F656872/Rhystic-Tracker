@@ -29,17 +29,9 @@ body {
 html.overlay-window,
 html.overlay-window body,
 html.overlay-window #root {
-  background: #0e0e12 !important;
-  background-color: #0e0e12 !important;
+  background: #0f172a !important;
+  background-color: #0f172a !important;
   overflow: hidden;
-}
-
-html.overlay-window * {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  filter: none !important;
-  transition: none !important;
-  transform: none !important;
 }
 
 html.overlay-window ::-webkit-scrollbar {

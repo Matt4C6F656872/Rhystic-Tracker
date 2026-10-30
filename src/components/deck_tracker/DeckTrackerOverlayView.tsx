@@ -130,9 +130,7 @@ export const DeckTrackerOverlayView: React.FC = () => {
   const handleStartDragging = (e: React.MouseEvent) => {
     // Only drag on left-click and not on buttons/inputs
     if (e.button === 0 && !(e.target as HTMLElement).closest('button, input')) {
-      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-        getCurrentWindow().startDragging().catch(console.error);
-      });
+      getCurrentWindow().startDragging().catch(console.error);
     }
   };
 
@@ -140,7 +138,7 @@ export const DeckTrackerOverlayView: React.FC = () => {
     <ErrorBoundary fallbackTitle="Overlay Deck Tracker Error">
       <div
         onMouseDown={handleStartDragging}
-        className="w-screen h-screen bg-neutral-950 overflow-hidden select-none flex flex-col border border-white/20 shadow-2xl rounded-none relative"
+        className="w-screen h-screen bg-slate-900/95 backdrop-blur-md text-white border border-slate-700/80 rounded-lg shadow-2xl overflow-hidden select-none flex flex-col relative"
       >
         {isMatchActive ? (
           <LiveDeckTrackerPanel
@@ -154,7 +152,7 @@ export const DeckTrackerOverlayView: React.FC = () => {
           />
         ) : (
           /* Standby / Waiting for Match Screen */
-          <div className="w-full h-full flex flex-col justify-between p-4 relative select-none bg-neutral-950 text-white">
+          <div className="w-full h-full flex flex-col justify-between p-4 relative select-none bg-slate-900/95 text-white">
             {/* Top Bar with Clear Close 'X' Button */}
             <div className="flex items-center justify-between w-full border-b border-white/10 pb-2 z-10 pointer-events-auto">
               <div className="flex items-center gap-1.5">
