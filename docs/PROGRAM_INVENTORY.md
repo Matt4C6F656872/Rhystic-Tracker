@@ -864,3 +864,4 @@ CREATE INDEX IF NOT EXISTS idx_claimed_handles_account_hash ON claimed_handles(p
 | **Handle Claim Pinning** | No | **Yes** | Binds Arena screen names to secret contributor tokens to prevent spoofing. |
 | **Global Combat Hall of Fame** | No | **Yes** | Surfaces the highest single-hit damage and total damage strikes community-wide. |
 | **Web Companion Portal** | No | **Yes** | Interactive web analytics dashboard (`GET /` on `server/`). |
+
